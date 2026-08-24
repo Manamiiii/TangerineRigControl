@@ -1,0 +1,21 @@
+# Build output
+bin/
+obj/
+artifacts/
+.vs/
+
+# IDE files
+*.user
+*.suo
+.idea/
+
+# Local-only settings and captures
+settings.xml
+*.local.xml
+*.log
+captures/
+
+# OS files
+Thumbs.db
+Desktop.ini
+
