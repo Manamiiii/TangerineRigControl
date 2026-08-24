@@ -11,8 +11,13 @@ namespace TangerineRigControl
         private const string MutexName = "Local\\TangerineRigControl.SingleInstance";
 
         [STAThread]
-        private static void Main()
+        private static int Main(string[] args)
         {
+            if (args != null && args.Length == 1 && string.Equals(args[0], "--self-test", StringComparison.OrdinalIgnoreCase))
+            {
+                return SelfTest.Run();
+            }
+
             bool createdNew;
             using (var mutex = new Mutex(true, MutexName, out createdNew))
             {
@@ -20,7 +25,7 @@ namespace TangerineRigControl
                 {
                     MessageBox.Show("TangerineRigControl 已经在运行。", "TangerineRigControl",
                         MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    return;
+                    return 2;
                 }
 
                 Application.EnableVisualStyles();
@@ -28,7 +33,7 @@ namespace TangerineRigControl
                 var settings = SettingsStore.Load();
                 Application.Run(new MainForm(settings));
             }
+            return 0;
         }
     }
 }
-

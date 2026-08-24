@@ -37,8 +37,14 @@ namespace TangerineRigControl.Automation
         {
             try
             {
-                Condition condition = null;
-                if (!string.IsNullOrWhiteSpace(step.AutomationId))
+                Condition condition;
+                if (!string.IsNullOrWhiteSpace(step.AutomationId) && !string.IsNullOrWhiteSpace(step.ElementName))
+                {
+                    condition = new AndCondition(
+                        new PropertyCondition(AutomationElement.AutomationIdProperty, step.AutomationId),
+                        new PropertyCondition(AutomationElement.NameProperty, step.ElementName));
+                }
+                else if (!string.IsNullOrWhiteSpace(step.AutomationId))
                 {
                     condition = new PropertyCondition(AutomationElement.AutomationIdProperty, step.AutomationId);
                 }
@@ -46,8 +52,10 @@ namespace TangerineRigControl.Automation
                 {
                     condition = new PropertyCondition(AutomationElement.NameProperty, step.ElementName);
                 }
-
-                if (condition == null) return false;
+                else
+                {
+                    return false;
+                }
                 var root = AutomationElement.FromHandle(handle);
                 var element = root.FindFirst(TreeScope.Descendants, condition);
                 if (element == null || !element.Current.IsEnabled) return false;

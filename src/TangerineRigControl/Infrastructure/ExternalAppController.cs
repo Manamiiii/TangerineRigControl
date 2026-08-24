@@ -39,7 +39,6 @@ namespace TangerineRigControl.Infrastructure
             IntPtr result = IntPtr.Zero;
             NativeMethods.EnumWindows(delegate(IntPtr handle, IntPtr ignored)
             {
-                if (!NativeMethods.IsWindowVisible(handle)) return true;
                 uint processId;
                 NativeMethods.GetWindowThreadProcessId(handle, out processId);
                 try
@@ -80,4 +79,3 @@ namespace TangerineRigControl.Infrastructure
         }
     }
 }
-

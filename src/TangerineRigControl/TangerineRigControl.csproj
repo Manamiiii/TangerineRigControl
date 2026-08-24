@@ -12,6 +12,7 @@
     <Deterministic>true</Deterministic>
     <LangVersion>5</LangVersion>
     <ApplicationIcon />
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -44,12 +45,15 @@
     <Compile Include="Infrastructure\InstalledAppLocator.cs" />
     <Compile Include="Infrastructure\NativeMethods.cs" />
     <Compile Include="Infrastructure\SettingsStore.cs" />
+    <Compile Include="Infrastructure\SelfTest.cs" />
+    <Compile Include="Infrastructure\StartupManager.cs" />
     <Compile Include="Models\RigSettings.cs" />
     <Compile Include="Services\SignalRgbClient.cs" />
     <Compile Include="UI\MainForm.cs" />
     <Compile Include="UI\SettingsForm.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <None Include="app.manifest" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

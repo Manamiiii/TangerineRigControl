@@ -11,8 +11,13 @@ namespace TangerineRigControl.Infrastructure
         internal const uint MouseeventfLeftdown = 0x0002;
         internal const uint MouseeventfLeftup = 0x0004;
         internal const int WmHotkey = 0x0312;
+        internal const uint ModAlt = 0x0001;
+        internal const uint ModControl = 0x0002;
         internal const uint ModNoRepeat = 0x4000;
         internal const int VkF8 = 0x77;
+        internal const int VkF10 = 0x79;
+        internal const int VkF11 = 0x7A;
+        internal const int VkF12 = 0x7B;
 
         [StructLayout(LayoutKind.Sequential)]
         internal struct Point
@@ -75,4 +80,3 @@ namespace TangerineRigControl.Infrastructure
         internal static extern bool UnregisterHotKey(IntPtr hWnd, int id);
     }
 }
-

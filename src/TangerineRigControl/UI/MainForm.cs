@@ -12,6 +12,9 @@ namespace TangerineRigControl.UI
 {
     internal sealed class MainForm : Form
     {
+        private const int HotkeyAllOn = 0x5450;
+        private const int HotkeyAllOff = 0x5451;
+        private const int HotkeyShow = 0x5452;
         private readonly RigSettings _settings;
         private readonly SignalRgbClient _signalRgb = new SignalRgbClient();
         private readonly MacroRunner _macroRunner = new MacroRunner();
@@ -47,7 +50,7 @@ namespace TangerineRigControl.UI
             };
             var subtitle = new Label
             {
-                Text = "本地运行 · 无遥测 · 原厂软件按需唤醒",
+                Text = "本地运行 · 无遥测 · Ctrl+Alt+F10 开启 · F11 关闭 · F12 显示",
                 ForeColor = Color.FromArgb(166, 171, 179),
                 Location = new Point(39, 72),
                 AutoSize = true
@@ -125,6 +128,52 @@ namespace TangerineRigControl.UI
         {
             if (disposing && _trayIcon != null) _trayIcon.Dispose();
             base.Dispose(disposing);
+        }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            var modifiers = NativeMethods.ModControl | NativeMethods.ModAlt | NativeMethods.ModNoRepeat;
+            NativeMethods.RegisterHotKey(Handle, HotkeyAllOn, modifiers, NativeMethods.VkF10);
+            NativeMethods.RegisterHotKey(Handle, HotkeyAllOff, modifiers, NativeMethods.VkF11);
+            NativeMethods.RegisterHotKey(Handle, HotkeyShow, modifiers, NativeMethods.VkF12);
+        }
+
+        protected override void OnHandleDestroyed(EventArgs e)
+        {
+            NativeMethods.UnregisterHotKey(Handle, HotkeyAllOn);
+            NativeMethods.UnregisterHotKey(Handle, HotkeyAllOff);
+            NativeMethods.UnregisterHotKey(Handle, HotkeyShow);
+            base.OnHandleDestroyed(e);
+        }
+
+        protected override void WndProc(ref Message message)
+        {
+            if (message.Msg == NativeMethods.WmHotkey)
+            {
+                var id = message.WParam.ToInt32();
+                if (id == HotkeyAllOn)
+                {
+                    RunAllFromHotkey(true);
+                    return;
+                }
+                if (id == HotkeyAllOff)
+                {
+                    RunAllFromHotkey(false);
+                    return;
+                }
+                if (id == HotkeyShow)
+                {
+                    RestoreFromTray();
+                    return;
+                }
+            }
+            base.WndProc(ref message);
+        }
+
+        private async void RunAllFromHotkey(bool enabled)
+        {
+            await RunAllAsync(enabled);
         }
 
         private Control CreateDeviceRow(string name, string description, int y, Func<bool, Task> toggle, Action open)

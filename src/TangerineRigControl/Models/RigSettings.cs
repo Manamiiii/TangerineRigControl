@@ -8,6 +8,7 @@ namespace TangerineRigControl.Models
     public sealed class RigSettings
     {
         public bool StartMinimized { get; set; }
+        public bool StartWithWindows { get; set; }
         public bool MinimizeVendorAppsAfterAction { get; set; }
         public bool SignalRgbEnabled { get; set; }
         public ApplicationTarget LConnect { get; set; }
@@ -81,4 +82,3 @@ namespace TangerineRigControl.Models
         }
     }
 }
-

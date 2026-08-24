@@ -15,6 +15,7 @@ namespace TangerineRigControl.UI
         private readonly TextBox _kanaliPath;
         private readonly CheckBox _signalRgb;
         private readonly CheckBox _minimizeApps;
+        private readonly CheckBox _startWithWindows;
 
         public SettingsForm(RigSettings settings)
         {
@@ -55,6 +56,13 @@ namespace TangerineRigControl.UI
                 Location = new Point(30, 120),
                 Size = new Size(330, 26)
             };
+            _startWithWindows = new CheckBox
+            {
+                Text = "Windows 登录时启动并缩到托盘",
+                Checked = StartupManager.IsEnabled(),
+                Location = new Point(370, 120),
+                Size = new Size(280, 26)
+            };
 
             var lianGroup = CreateAppGroup(settings.LConnect, 30, 158, out _lianPath);
             var kanaliGroup = CreateAppGroup(settings.Kanali, 30, 283, out _kanaliPath);
@@ -66,7 +74,18 @@ namespace TangerineRigControl.UI
                 settings.MinimizeVendorAppsAfterAction = _minimizeApps.Checked;
                 settings.LConnect.ExecutablePath = _lianPath.Text.Trim();
                 settings.Kanali.ExecutablePath = _kanaliPath.Text.Trim();
-                SettingsStore.Save(settings);
+                settings.StartWithWindows = _startWithWindows.Checked;
+                settings.StartMinimized = _startWithWindows.Checked;
+                try
+                {
+                    StartupManager.SetEnabled(_startWithWindows.Checked);
+                    SettingsStore.Save(settings);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(this, ex.Message, "保存设置失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
                 DialogResult = DialogResult.OK;
                 Close();
             };
@@ -77,6 +96,7 @@ namespace TangerineRigControl.UI
             Controls.Add(privacy);
             Controls.Add(_signalRgb);
             Controls.Add(_minimizeApps);
+            Controls.Add(_startWithWindows);
             Controls.Add(lianGroup);
             Controls.Add(kanaliGroup);
             Controls.Add(save);
