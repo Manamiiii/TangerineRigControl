@@ -12,9 +12,9 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
+        uses: microsoft/setup-msbuild@v3
       - name: Build
         run: msbuild TangerineRigControl.sln /p:Configuration=Release /m
       - name: Run self-test
@@ -23,7 +23,7 @@ jobs:
           $process = Start-Process src/TangerineRigControl/bin/Release/TangerineRigControl.exe -ArgumentList '--self-test' -Wait -PassThru
           if ($process.ExitCode -ne 0) { exit $process.ExitCode }
       - name: Upload portable executable
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: TangerineRigControl-windows-portable
           path: src/TangerineRigControl/bin/Release/TangerineRigControl.exe
