@@ -82,7 +82,8 @@ namespace TangerineRigControl.Infrastructure
             if (settings.LConnect.TurnOff == null) settings.LConnect.TurnOff = new MacroDefinition { Name = "关闭" };
             if (settings.Kanali.TurnOn == null) settings.Kanali.TurnOn = new MacroDefinition { Name = "开启" };
             if (settings.Kanali.TurnOff == null) settings.Kanali.TurnOff = new MacroDefinition { Name = "关闭" };
+            if (settings.LConnect.InitialDelayMilliseconds <= 0) settings.LConnect.InitialDelayMilliseconds = defaults.LConnect.InitialDelayMilliseconds;
+            if (settings.Kanali.InitialDelayMilliseconds <= 0) settings.Kanali.InitialDelayMilliseconds = defaults.Kanali.InitialDelayMilliseconds;
         }
     }
 }
-

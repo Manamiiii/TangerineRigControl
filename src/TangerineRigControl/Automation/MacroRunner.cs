@@ -19,7 +19,7 @@ namespace TangerineRigControl.Automation
 
             var handle = _apps.OpenAndFindWindow(target, 10000);
             _apps.Show(handle);
-            Thread.Sleep(500);
+            Thread.Sleep(Math.Max(300, target.InitialDelayMilliseconds));
 
             foreach (var step in macro.Steps)
             {

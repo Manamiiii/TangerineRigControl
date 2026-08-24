@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.IO;
+using System.Text;
 using System.Windows.Forms;
 using TangerineRigControl.Automation;
 using TangerineRigControl.Infrastructure;
@@ -91,6 +92,13 @@ namespace TangerineRigControl.UI
             };
             var cancel = CreateButton("取消", 580, 423, 72, false);
             cancel.Click += delegate { DialogResult = DialogResult.Cancel; Close(); };
+            var diagnostics = CreateButton("复制脱敏诊断", 30, 423, 130, false);
+            diagnostics.Click += delegate
+            {
+                Clipboard.SetText(BuildSanitizedDiagnostics());
+                MessageBox.Show(this, "诊断信息已复制。内容不包含程序路径、用户名、设备标识或录制坐标。",
+                    "已复制", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            };
 
             Controls.Add(title);
             Controls.Add(privacy);
@@ -101,6 +109,7 @@ namespace TangerineRigControl.UI
             Controls.Add(kanaliGroup);
             Controls.Add(save);
             Controls.Add(cancel);
+            Controls.Add(diagnostics);
         }
 
         private GroupBox CreateAppGroup(ApplicationTarget target, int x, int y, out TextBox pathBox)
@@ -179,6 +188,20 @@ namespace TangerineRigControl.UI
                 ForeColor = accent ? Color.Black : Color.White,
                 FlatAppearance = { BorderSize = 0 }
             };
+        }
+
+        private string BuildSanitizedDiagnostics()
+        {
+            var builder = new StringBuilder();
+            builder.AppendLine("TangerineRigControl " + typeof(SettingsForm).Assembly.GetName().Version);
+            builder.AppendLine("OS: " + Environment.OSVersion.VersionString);
+            builder.AppendLine("SignalRGB integration: " + (_signalRgb.Checked ? "enabled" : "disabled"));
+            builder.AppendLine("L-Connect detected: " + (File.Exists(_lianPath.Text) ? "yes" : "no"));
+            builder.AppendLine("L-Connect macros: on=" + _settings.LConnect.TurnOn.Steps.Count + ", off=" + _settings.LConnect.TurnOff.Steps.Count);
+            builder.AppendLine("KANALI detected: " + (File.Exists(_kanaliPath.Text) ? "yes" : "no"));
+            builder.AppendLine("KANALI macros: on=" + _settings.Kanali.TurnOn.Steps.Count + ", off=" + _settings.Kanali.TurnOff.Steps.Count);
+            builder.AppendLine("Start with Windows: " + (_startWithWindows.Checked ? "yes" : "no"));
+            return builder.ToString();
         }
     }
 }

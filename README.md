@@ -56,6 +56,8 @@ if ($process.ExitCode -ne 0) { exit $process.ExitCode }
 生成文件位于 `src\TangerineRigControl\bin\Release`。程序没有第三方运行时依赖。
 每次推送到 `main` 后，GitHub Actions 也会提供只包含可执行文件的构建产物。
 
+第一次连接实际设备时可按照 [晚间设备校准清单](docs/NIGHTLY-DEVICE-TEST.md) 逐项验证。设置页提供“复制脱敏诊断”按钮，输出不会包含程序路径、用户名、设备标识或录制坐标。
+
 ## 当前阶段
 
 这是首个可运行 MVP。下一步会在实际设备上完成两套屏幕操作序列的校准，并根据原厂软件行为增加状态检测与快捷键。

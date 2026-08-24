@@ -43,11 +43,13 @@ namespace TangerineRigControl.Models
         public string ExecutablePath { get; set; }
         public string ProcessName { get; set; }
         public string WindowTitleContains { get; set; }
+        public int InitialDelayMilliseconds { get; set; }
         public MacroDefinition TurnOn { get; set; }
         public MacroDefinition TurnOff { get; set; }
 
         public ApplicationTarget()
         {
+            InitialDelayMilliseconds = 1200;
             TurnOn = new MacroDefinition { Name = "开启" };
             TurnOff = new MacroDefinition { Name = "关闭" };
         }
@@ -78,7 +80,7 @@ namespace TangerineRigControl.Models
 
         public MacroStep()
         {
-            DelayAfterMilliseconds = 700;
+            DelayAfterMilliseconds = 900;
         }
     }
 }
