@@ -1,7 +1,8 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Threading.Tasks;
+using System.Threading;
 using System.Windows.Forms;
 using TangerineRigControl.Automation;
 using TangerineRigControl.Infrastructure;
@@ -15,7 +16,7 @@ namespace TangerineRigControl.UI
         private const int HotkeyAllOn = 0x5450;
         private const int HotkeyAllOff = 0x5451;
         private const int HotkeyShow = 0x5452;
-        private readonly RigSettings _settings;
+        private RigSettings _settings;
         private readonly SignalRgbClient _signalRgb = new SignalRgbClient();
         private readonly MacroRunner _macroRunner = new MacroRunner();
         private readonly ExternalAppController _apps = new ExternalAppController();
@@ -23,6 +24,10 @@ namespace TangerineRigControl.UI
         private readonly NotifyIcon _trayIcon;
         private bool _allowClose;
         private bool _busy;
+        private bool _editing;
+        private CancellationTokenSource _operation;
+        private string _hotkeyWarning = string.Empty;
+        private readonly Button _stop = CreateButton("停止操作", 38, 452, 122, false);
 
         public MainForm(RigSettings settings)
         {
@@ -71,17 +76,24 @@ namespace TangerineRigControl.UI
             var settingsButton = CreateButton("设置与录制", 38, 410, 122, false);
             settingsButton.Click += delegate
             {
-                using (var form = new SettingsForm(_settings))
+                if (_busy || _editing) return;
+                _editing = true;
+                try
                 {
-                    form.ShowDialog(this);
+                    using (var form = new SettingsForm(_settings))
+                    {
+                        if (form.ShowDialog(this) == DialogResult.OK) _settings = form.SavedSettings;
+                    }
+                    SetStatus(InitialStatus());
                 }
+                finally { _editing = false; }
             };
 
             _status = new Label
             {
                 Text = InitialStatus(),
                 Location = new Point(180, 417),
-                Size = new Size(526, 42),
+                Size = new Size(526, 70),
                 ForeColor = Color.FromArgb(166, 171, 179),
                 TextAlign = ContentAlignment.TopRight
             };
@@ -93,11 +105,15 @@ namespace TangerineRigControl.UI
             Controls.Add(allOff);
             Controls.Add(settingsButton);
             Controls.Add(_status);
+            _stop.Enabled = false;
+            _stop.Click += delegate { if (_operation != null) _operation.Cancel(); };
+            Controls.Add(_stop);
 
             var trayMenu = new ContextMenuStrip();
             trayMenu.Items.Add("显示控制台", null, delegate { RestoreFromTray(); });
             trayMenu.Items.Add("全部开启", null, async delegate { await RunAllAsync(true); });
             trayMenu.Items.Add("全部关闭", null, async delegate { await RunAllAsync(false); });
+            trayMenu.Items.Add("停止操作", null, delegate { if (_operation != null) _operation.Cancel(); });
             trayMenu.Items.Add(new ToolStripSeparator());
             trayMenu.Items.Add("退出", null, delegate { _allowClose = true; Close(); });
             _trayIcon = new NotifyIcon
@@ -126,7 +142,12 @@ namespace TangerineRigControl.UI
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing && _trayIcon != null) _trayIcon.Dispose();
+            if (disposing)
+            {
+                if (_operation != null) _operation.Cancel();
+                if (_trayIcon != null) _trayIcon.Dispose();
+                _signalRgb.Dispose();
+            }
             base.Dispose(disposing);
         }
 
@@ -134,9 +155,12 @@ namespace TangerineRigControl.UI
         {
             base.OnHandleCreated(e);
             var modifiers = NativeMethods.ModControl | NativeMethods.ModAlt | NativeMethods.ModNoRepeat;
-            NativeMethods.RegisterHotKey(Handle, HotkeyAllOn, modifiers, NativeMethods.VkF10);
-            NativeMethods.RegisterHotKey(Handle, HotkeyAllOff, modifiers, NativeMethods.VkF11);
-            NativeMethods.RegisterHotKey(Handle, HotkeyShow, modifiers, NativeMethods.VkF12);
+            var failed = new List<string>();
+            if (!NativeMethods.RegisterHotKey(Handle, HotkeyAllOn, modifiers, NativeMethods.VkF10)) failed.Add("F10");
+            if (!NativeMethods.RegisterHotKey(Handle, HotkeyAllOff, modifiers, NativeMethods.VkF11)) failed.Add("F11");
+            if (!NativeMethods.RegisterHotKey(Handle, HotkeyShow, modifiers, NativeMethods.VkF12)) failed.Add("F12");
+            _hotkeyWarning = failed.Count == 0 ? string.Empty : "快捷键注册失败：Ctrl+Alt+" + string.Join(" / ", failed);
+            if (_status != null && failed.Count > 0) SetStatus(_hotkeyWarning);
         }
 
         protected override void OnHandleDestroyed(EventArgs e)
@@ -212,27 +236,35 @@ namespace TangerineRigControl.UI
 
         private async Task RunAllAsync(bool enabled)
         {
-            if (_busy) return;
+            if (_busy || _editing) return;
             _busy = true;
+            _operation = new CancellationTokenSource();
+            _stop.Enabled = true;
             SetStatus(enabled ? "正在开启全部设备…" : "正在关闭全部设备…");
             var errors = new List<string>();
-
-            if (_settings.SignalRgbEnabled)
+            try
             {
-                try { await _signalRgb.SetEnabledAsync(enabled); }
-                catch (Exception ex) { errors.Add("灯光：" + ex.Message); }
+                if (_settings.SignalRgbEnabled)
+                {
+                    try { await _signalRgb.SetEnabledAsync(enabled); }
+                    catch (Exception ex) { errors.Add("灯光：" + ex.Message); }
+                }
+                _operation.Token.ThrowIfCancellationRequested();
+                await TryRunMacroAsync(_settings.LConnect, enabled, errors);
+                _operation.Token.ThrowIfCancellationRequested();
+                await TryRunMacroAsync(_settings.Kanali, enabled, errors);
+                _operation.Token.ThrowIfCancellationRequested();
+                SetStatus(errors.Count == 0 ? "全部操作已执行；屏幕实际状态待确认" : string.Join("  |  ", errors));
             }
-
-            await TryRunMacroAsync(_settings.LConnect, enabled, errors);
-            await TryRunMacroAsync(_settings.Kanali, enabled, errors);
-            _busy = false;
-            SetStatus(errors.Count == 0 ? (enabled ? "全部开启完成" : "全部关闭完成") : string.Join("  |  ", errors));
+            catch (OperationCanceledException) { SetStatus("操作已停止，部分步骤可能已生效，请确认设备状态。"); }
+            catch (Exception ex) { SetStatus(ex.Message); }
+            finally { EndOperation(); }
         }
 
         private async Task TryRunMacroAsync(ApplicationTarget target, bool enabled, IList<string> errors)
         {
             var macro = enabled ? target.TurnOn : target.TurnOff;
-            if (macro == null || macro.Steps.Count == 0)
+            if (macro == null || macro.Steps == null || macro.Steps.Count == 0)
             {
                 errors.Add(target.DisplayName + "：尚未录制");
                 return;
@@ -240,8 +272,9 @@ namespace TangerineRigControl.UI
 
             try
             {
-                await Task.Run(delegate { _macroRunner.Run(target, macro, _settings.MinimizeVendorAppsAfterAction); });
+                await Task.Run(delegate { _macroRunner.Run(target, macro, _settings.MinimizeVendorAppsAfterAction, _operation.Token); });
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
                 errors.Add(target.DisplayName + "：" + ex.Message);
@@ -263,38 +296,51 @@ namespace TangerineRigControl.UI
         {
             var macro = enabled ? target.TurnOn : target.TurnOff;
             await RunBusyAsync("正在操作" + target.DisplayName + "…",
-                async delegate { await Task.Run(delegate { _macroRunner.Run(target, macro, _settings.MinimizeVendorAppsAfterAction); }); },
-                target.DisplayName + (enabled ? "已开启" : "已关闭"));
+                async delegate { await Task.Run(delegate { _macroRunner.Run(target, macro, _settings.MinimizeVendorAppsAfterAction, _operation.Token); }); },
+                target.DisplayName + (enabled ? "开启" : "关闭") + "操作已执行；实际状态待确认");
         }
 
         private async Task RunBusyAsync(string progress, Func<Task> action, string success)
         {
-            if (_busy) return;
+            if (_busy || _editing) return;
             _busy = true;
+            _operation = new CancellationTokenSource();
+            _stop.Enabled = true;
             SetStatus(progress);
             try
             {
                 await action();
+                _operation.Token.ThrowIfCancellationRequested();
                 SetStatus(success);
             }
+            catch (OperationCanceledException) { SetStatus("操作已停止，部分步骤可能已生效，请确认设备状态。"); }
             catch (Exception ex)
             {
                 SetStatus(ex.Message);
             }
             finally
             {
-                _busy = false;
+                EndOperation();
             }
+        }
+
+        private void EndOperation()
+        {
+            _busy = false;
+            if (_operation != null) { _operation.Dispose(); _operation = null; }
+            if (!IsDisposed) _stop.Enabled = false;
         }
 
         private void OpenVendor(ApplicationTarget target)
         {
+            if (_busy || _editing) return;
             try { _apps.Show(_apps.OpenAndFindWindow(target, 10000)); }
             catch (Exception ex) { SetStatus(ex.Message); }
         }
 
         private void OpenSignalRgb()
         {
+            if (_busy || _editing) return;
             try
             {
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("signalrgb://") { UseShellExecute = true });
@@ -307,6 +353,7 @@ namespace TangerineRigControl.UI
 
         private string InitialStatus()
         {
+            if (!string.IsNullOrEmpty(_hotkeyWarning)) return _hotkeyWarning;
             var lian = _settings.LConnect.TurnOn.Steps.Count > 0 && _settings.LConnect.TurnOff.Steps.Count > 0;
             var kanali = _settings.Kanali.TurnOn.Steps.Count > 0 && _settings.Kanali.TurnOff.Steps.Count > 0;
             return lian && kanali ? "控制序列已就绪" : "请先进入“设置与录制”校准屏幕开关";
@@ -314,7 +361,9 @@ namespace TangerineRigControl.UI
 
         private void SetStatus(string text)
         {
+            if (IsDisposed || Disposing) return;
             _status.Text = text;
+            if (_trayIcon != null) _trayIcon.Text = text.Length > 63 ? text.Substring(0, 60) + "…" : text;
         }
 
         private void RestoreFromTray()
@@ -326,7 +375,11 @@ namespace TangerineRigControl.UI
 
         private void OnFormClosing(object sender, FormClosingEventArgs e)
         {
-            if (_allowClose || e.CloseReason == CloseReason.WindowsShutDown) return;
+            if (_allowClose || e.CloseReason == CloseReason.WindowsShutDown)
+            {
+                if (_operation != null) _operation.Cancel();
+                return;
+            }
             e.Cancel = true;
             Hide();
             _trayIcon.ShowBalloonTip(1200, "TangerineRigControl", "控制台仍在托盘中运行。", ToolTipIcon.Info);

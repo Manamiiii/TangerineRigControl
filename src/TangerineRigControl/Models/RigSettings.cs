@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Xml.Serialization;
 
@@ -74,6 +74,7 @@ namespace TangerineRigControl.Models
     {
         public string AutomationId { get; set; }
         public string ElementName { get; set; }
+        public bool? DesiredToggleState { get; set; }
         public double RelativeX { get; set; }
         public double RelativeY { get; set; }
         public int DelayAfterMilliseconds { get; set; }

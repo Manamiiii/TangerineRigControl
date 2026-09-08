@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Windows.Forms;
 using TangerineRigControl.Infrastructure;
@@ -31,6 +31,8 @@ namespace TangerineRigControl
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
                 var settings = SettingsStore.Load();
+                if (!string.IsNullOrEmpty(SettingsStore.LoadWarning))
+                    MessageBox.Show(SettingsStore.LoadWarning, "配置读取提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 Application.Run(new MainForm(settings));
             }
             return 0;

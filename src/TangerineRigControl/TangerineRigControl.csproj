@@ -44,6 +44,8 @@
     <Compile Include="Infrastructure\ExternalAppController.cs" />
     <Compile Include="Infrastructure\InstalledAppLocator.cs" />
     <Compile Include="Infrastructure\NativeMethods.cs" />
+    <Compile Include="Infrastructure\ProcessIntegrity.cs" />
+    <Compile Include="Infrastructure\LConnectWindowRestorer.cs" />
     <Compile Include="Infrastructure\SettingsStore.cs" />
     <Compile Include="Infrastructure\SelfTest.cs" />
     <Compile Include="Infrastructure\StartupManager.cs" />

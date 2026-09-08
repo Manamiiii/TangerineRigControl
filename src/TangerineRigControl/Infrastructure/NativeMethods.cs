@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -35,6 +35,45 @@ namespace TangerineRigControl.Infrastructure
             public int Bottom;
         }
 
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct WindowPlacement
+        {
+            internal int Length;
+            internal int Flags;
+            internal int ShowCommand;
+            internal Point MinPosition;
+            internal Point MaxPosition;
+            internal Rect NormalPosition;
+        }
+
+        [DllImport("user32.dll")]
+        internal static extern bool IsIconic(IntPtr handle);
+
+        [DllImport("user32.dll")]
+        internal static extern bool GetWindowPlacement(IntPtr handle, ref WindowPlacement placement);
+
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct SidAndAttributes
+        {
+            public IntPtr Sid;
+            public uint Attributes;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct TokenMandatoryLabel
+        {
+            public SidAndAttributes Label;
+        }
+
+        [DllImport("user32.dll")]
+        internal static extern bool IsWindow(IntPtr handle);
+        [DllImport("user32.dll")]
+        internal static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")]
+        internal static extern IntPtr WindowFromPoint(Point point);
+        [DllImport("user32.dll")]
+        internal static extern IntPtr GetAncestor(IntPtr handle, uint flags);
+
         internal delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
         [DllImport("user32.dll")]
@@ -51,6 +90,12 @@ namespace TangerineRigControl.Infrastructure
 
         [DllImport("user32.dll")]
         internal static extern bool ShowWindow(IntPtr hWnd, int command);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        internal static extern bool PostMessage(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        internal static extern bool ShowWindowAsync(IntPtr hWnd, int command);
 
         [DllImport("user32.dll")]
         internal static extern bool SetForegroundWindow(IntPtr hWnd);
@@ -78,5 +123,28 @@ namespace TangerineRigControl.Infrastructure
 
         [DllImport("user32.dll")]
         internal static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        internal static extern IntPtr OpenProcess(uint desiredAccess, bool inheritHandle, uint processId);
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        internal static extern bool OpenProcessToken(IntPtr processHandle, uint desiredAccess, out IntPtr tokenHandle);
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        internal static extern bool GetTokenInformation(
+            IntPtr tokenHandle, int tokenInformationClass, IntPtr tokenInformation,
+            int tokenInformationLength, out int returnLength);
+
+        [DllImport("advapi32.dll")]
+        internal static extern IntPtr GetSidSubAuthorityCount(IntPtr sid);
+
+        [DllImport("advapi32.dll")]
+        internal static extern IntPtr GetSidSubAuthority(IntPtr sid, int subAuthority);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        internal static extern bool CloseHandle(IntPtr handle);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        internal static extern bool GetNamedPipeServerProcessId(Microsoft.Win32.SafeHandles.SafePipeHandle pipe, out uint processId);
     }
 }

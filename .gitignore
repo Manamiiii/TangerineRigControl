@@ -11,6 +11,7 @@ artifacts/
 
 # Local-only settings and captures
 settings.xml
+settings.xml.*
 *.local.xml
 *.log
 captures/

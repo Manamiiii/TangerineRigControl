@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.IO;
 using System.Text;
@@ -12,6 +12,7 @@ namespace TangerineRigControl.UI
     internal sealed class SettingsForm : Form
     {
         private readonly RigSettings _settings;
+        internal RigSettings SavedSettings { get { return _settings; } }
         private readonly TextBox _lianPath;
         private readonly TextBox _kanaliPath;
         private readonly CheckBox _signalRgb;
@@ -20,6 +21,7 @@ namespace TangerineRigControl.UI
 
         public SettingsForm(RigSettings settings)
         {
+            settings = SettingsStore.Clone(settings);
             _settings = settings;
             Text = "TangerineRigControl 设置";
             StartPosition = FormStartPosition.CenterParent;
@@ -79,8 +81,16 @@ namespace TangerineRigControl.UI
                 settings.StartMinimized = _startWithWindows.Checked;
                 try
                 {
+                    SettingsStore.Validate(settings);
+                    var previousStartup = StartupManager.ReadValue();
                     StartupManager.SetEnabled(_startWithWindows.Checked);
-                    SettingsStore.Save(settings);
+                    try { SettingsStore.Save(settings); }
+                    catch
+                    {
+                        try { StartupManager.RestoreValue(previousStartup); }
+                        catch { throw new InvalidOperationException("配置保存失败，且启动项恢复失败。请重新检查 Windows 登录启动选项。"); }
+                        throw;
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -107,6 +117,13 @@ namespace TangerineRigControl.UI
             Controls.Add(_startWithWindows);
             Controls.Add(lianGroup);
             Controls.Add(kanaliGroup);
+            Controls.Add(new Label
+            {
+                Text = "录制和清除仅修改草稿；点击“保存”生效，点击“取消”可撤销。",
+                Location = new Point(30, 402),
+                AutoSize = true,
+                ForeColor = Color.Silver
+            });
             Controls.Add(save);
             Controls.Add(cancel);
             Controls.Add(diagnostics);
@@ -141,11 +158,25 @@ namespace TangerineRigControl.UI
                 }
             };
 
-            var on = CreateButton("录制开启（" + target.TurnOn.Steps.Count + " 步）", 16, 65, 170, false);
-            var off = CreateButton("录制关闭（" + target.TurnOff.Steps.Count + " 步）", 196, 65, 170, false);
+            var on = CreateButton("录制开启（" + target.TurnOn.Steps.Count + " 步）", 16, 65, 130, false);
+            var clearOn = CreateButton("清除", 150, 65, 52, false);
+            var off = CreateButton("录制关闭（" + target.TurnOff.Steps.Count + " 步）", 212, 65, 130, false);
+            var clearOff = CreateButton("清除", 346, 65, 52, false);
             var open = CreateButton("打开原厂软件", 432, 65, 170, false);
             on.Click += delegate { Record(target, target.TurnOn, on, "录制开启"); };
             off.Click += delegate { Record(target, target.TurnOff, off, "录制关闭"); };
+            clearOn.AccessibleName = target.DisplayName + "清除开启序列";
+            clearOff.AccessibleName = target.DisplayName + "清除关闭序列";
+            clearOn.Click += delegate
+            {
+                target.TurnOn.Steps.Clear();
+                on.Text = "录制开启（0 步）";
+            };
+            clearOff.Click += delegate
+            {
+                target.TurnOff.Steps.Clear();
+                off.Text = "录制关闭（0 步）";
+            };
             open.Click += delegate
             {
                 try
@@ -159,7 +190,9 @@ namespace TangerineRigControl.UI
             group.Controls.Add(pathBox);
             group.Controls.Add(browse);
             group.Controls.Add(on);
+            group.Controls.Add(clearOn);
             group.Controls.Add(off);
+            group.Controls.Add(clearOff);
             group.Controls.Add(open);
             return group;
         }

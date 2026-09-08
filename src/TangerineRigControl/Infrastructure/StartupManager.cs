@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
@@ -22,6 +22,26 @@ namespace TangerineRigControl.Infrastructure
                 {
                     key.DeleteValue(ValueName, false);
                 }
+            }
+        }
+
+        internal static Tuple<object, RegistryValueKind> ReadValue()
+        {
+            using (var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, false))
+            {
+                if (key == null) throw new InvalidOperationException("无法读取当前用户的启动项设置。");
+                var value = key.GetValue(ValueName, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
+                return Tuple.Create(value, value == null ? RegistryValueKind.String : key.GetValueKind(ValueName));
+            }
+        }
+
+        internal static void RestoreValue(Tuple<object, RegistryValueKind> value)
+        {
+            using (var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, true))
+            {
+                if (key == null) throw new InvalidOperationException("无法恢复启动项设置。");
+                if (value.Item1 == null) key.DeleteValue(ValueName, false);
+                else key.SetValue(ValueName, value.Item1, value.Item2);
             }
         }
 

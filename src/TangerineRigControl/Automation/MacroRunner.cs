@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
-using System.Windows.Automation;
+
+
 using TangerineRigControl.Infrastructure;
 using TangerineRigControl.Models;
 
@@ -10,95 +11,77 @@ namespace TangerineRigControl.Automation
     {
         private readonly ExternalAppController _apps = new ExternalAppController();
 
-        public void Run(ApplicationTarget target, MacroDefinition macro, bool minimizeAfterAction)
+        public void Run(ApplicationTarget target, MacroDefinition macro, bool minimizeAfterAction, CancellationToken cancellation)
         {
-            if (macro == null || macro.Steps == null || macro.Steps.Count == 0)
-            {
-                throw new InvalidOperationException(target.DisplayName + "的“" + (macro == null ? "操作" : macro.Name) + "”尚未录制。");
-            }
-
+            SettingsStore.ValidateMacro(macro);
+            if (macro.Steps.Count == 0) throw new InvalidOperationException(target.DisplayName + "尚未录制该操作。");
+            cancellation.ThrowIfCancellationRequested();
             var handle = _apps.OpenAndFindWindow(target, 10000);
+            uint processId;
+            NativeMethods.GetWindowThreadProcessId(handle, out processId);
             _apps.Show(handle);
-            Thread.Sleep(Math.Max(300, target.InitialDelayMilliseconds));
-
-            foreach (var step in macro.Steps)
+            Wait(Math.Max(300, target.InitialDelayMilliseconds), cancellation);
+            for (var index = 0; index < macro.Steps.Count; index++)
             {
-                if (!TryInvokeAccessibleElement(handle, step))
+                cancellation.ThrowIfCancellationRequested();
+                EnsureWindow(handle, processId);
+                try
                 {
+                    var step = macro.Steps[index];
                     ClickRelative(handle, step.RelativeX, step.RelativeY);
+                    Wait(Math.Max(100, step.DelayAfterMilliseconds), cancellation);
                 }
-                Thread.Sleep(Math.Max(100, step.DelayAfterMilliseconds));
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException("第 " + (index + 1) + " 步停止：" + ex.Message, ex);
+                }
             }
-
+            EnsureWindow(handle, processId);
             if (minimizeAfterAction) _apps.Minimize(handle);
         }
 
-        private static bool TryInvokeAccessibleElement(IntPtr handle, MacroStep step)
+        internal static void EnsureWindow(IntPtr handle, uint expectedProcess)
         {
-            try
-            {
-                Condition condition;
-                if (!string.IsNullOrWhiteSpace(step.AutomationId) && !string.IsNullOrWhiteSpace(step.ElementName))
-                {
-                    condition = new AndCondition(
-                        new PropertyCondition(AutomationElement.AutomationIdProperty, step.AutomationId),
-                        new PropertyCondition(AutomationElement.NameProperty, step.ElementName));
-                }
-                else if (!string.IsNullOrWhiteSpace(step.AutomationId))
-                {
-                    condition = new PropertyCondition(AutomationElement.AutomationIdProperty, step.AutomationId);
-                }
-                else if (!string.IsNullOrWhiteSpace(step.ElementName))
-                {
-                    condition = new PropertyCondition(AutomationElement.NameProperty, step.ElementName);
-                }
-                else
-                {
-                    return false;
-                }
-                var root = AutomationElement.FromHandle(handle);
-                var element = root.FindFirst(TreeScope.Descendants, condition);
-                if (element == null || !element.Current.IsEnabled) return false;
+            uint actualProcess;
+            NativeMethods.GetWindowThreadProcessId(handle, out actualProcess);
+            if (!NativeMethods.IsWindow(handle) || actualProcess != expectedProcess || !NativeMethods.IsWindowVisible(handle) || NativeMethods.GetForegroundWindow() != handle)
+                throw new InvalidOperationException("原厂软件窗口已变化，请重新打开后重试。");
+            ProcessIntegrity.EnsureCanAutomate(handle, "原厂软件");
+        }
 
-                object pattern;
-                if (element.TryGetCurrentPattern(InvokePattern.Pattern, out pattern))
-                {
-                    ((InvokePattern)pattern).Invoke();
-                    return true;
-                }
-                if (element.TryGetCurrentPattern(TogglePattern.Pattern, out pattern))
-                {
-                    ((TogglePattern)pattern).Toggle();
-                    return true;
-                }
-
-                var bounds = element.Current.BoundingRectangle;
-                if (bounds.IsEmpty) return false;
-                ClickScreen((int)bounds.Left + (int)bounds.Width / 2, (int)bounds.Top + (int)bounds.Height / 2);
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
+        private static void Wait(int milliseconds, CancellationToken cancellation)
+        {
+            if (cancellation.WaitHandle.WaitOne(milliseconds)) cancellation.ThrowIfCancellationRequested();
         }
 
         private static void ClickRelative(IntPtr handle, double relativeX, double relativeY)
         {
-            NativeMethods.Rect rect;
-            if (!NativeMethods.GetClientRect(handle, out rect)) throw new InvalidOperationException("无法读取程序窗口尺寸。");
-            var point = new NativeMethods.Point
-            {
-                X = (int)Math.Round((rect.Right - rect.Left) * relativeX),
-                Y = (int)Math.Round((rect.Bottom - rect.Top) * relativeY)
-            };
-            NativeMethods.ClientToScreen(handle, ref point);
-            ClickScreen(point.X, point.Y);
+            var point = GetRecordedPoint(handle, relativeX, relativeY);
+            ClickScreen(handle, point.X, point.Y);
         }
 
-        private static void ClickScreen(int x, int y)
+        private static NativeMethods.Point GetRecordedPoint(IntPtr handle, double relativeX, double relativeY)
         {
-            NativeMethods.SetCursorPos(x, y);
+            NativeMethods.Rect rect;
+            if (!NativeMethods.GetClientRect(handle, out rect) || rect.Right <= rect.Left || rect.Bottom <= rect.Top)
+                throw new InvalidOperationException("无法读取程序窗口尺寸。");
+            var point = new NativeMethods.Point
+            {
+                X = Math.Min(rect.Right - rect.Left - 1, (int)((rect.Right - rect.Left) * relativeX)),
+                Y = Math.Min(rect.Bottom - rect.Top - 1, (int)((rect.Bottom - rect.Top) * relativeY))
+            };
+            if (!NativeMethods.ClientToScreen(handle, ref point)) throw new InvalidOperationException("无法转换点击位置。");
+            return point;
+        }
+
+        private static void ClickScreen(IntPtr handle, int x, int y)
+        {
+            var point = new NativeMethods.Point { X = x, Y = y };
+            if (NativeMethods.GetForegroundWindow() != handle ||
+                NativeMethods.GetAncestor(NativeMethods.WindowFromPoint(point), 2) != handle)
+                throw new InvalidOperationException("目标窗口失去焦点或被遮挡，已停止点击。");
+            if (!NativeMethods.SetCursorPos(x, y)) throw new InvalidOperationException("无法移动鼠标，已停止点击。");
             NativeMethods.mouse_event(NativeMethods.MouseeventfLeftdown, 0, 0, 0, UIntPtr.Zero);
             NativeMethods.mouse_event(NativeMethods.MouseeventfLeftup, 0, 0, 0, UIntPtr.Zero);
         }

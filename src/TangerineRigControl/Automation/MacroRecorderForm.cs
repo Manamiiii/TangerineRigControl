@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Windows.Automation;
+
 using System.Windows.Forms;
 using TangerineRigControl.Infrastructure;
 using TangerineRigControl.Models;
@@ -88,12 +88,20 @@ namespace TangerineRigControl.Automation
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
+            // Let the modal dialog finish its initial activation before foregrounding the vendor window.
+            BeginInvoke(new MethodInvoker(StartRecording));
+        }
+
+        private void StartRecording()
+        {
+            if (IsDisposed || Disposing) return;
             try
             {
                 _targetWindow = _apps.OpenAndFindWindow(_target, 10000);
+                if (!NativeMethods.RegisterHotKey(Handle, HotkeyId, NativeMethods.ModNoRepeat, NativeMethods.VkF8))
+                    throw new InvalidOperationException("F8 已被占用，无法开始录制。请关闭占用快捷键的软件后重试。");
+                // TopMost keeps the recorder available without reactivating its owner over the vendor.
                 _apps.Show(_targetWindow);
-                NativeMethods.RegisterHotKey(Handle, HotkeyId, NativeMethods.ModNoRepeat, NativeMethods.VkF8);
-                Activate();
             }
             catch (Exception ex)
             {
@@ -113,7 +121,8 @@ namespace TangerineRigControl.Automation
         {
             if (message.Msg == NativeMethods.WmHotkey && message.WParam.ToInt32() == HotkeyId)
             {
-                CaptureStep();
+                try { CaptureStep(); }
+                catch (Exception ex) { MessageBox.Show(this, ex.Message, "未记录", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
                 return;
             }
             base.WndProc(ref message);
@@ -121,8 +130,12 @@ namespace TangerineRigControl.Automation
 
         private void CaptureStep()
         {
+            if (_steps.Count >= 200) throw new InvalidOperationException("每条序列最多记录 200 步。");
             var screenPoint = new NativeMethods.Point();
             if (!NativeMethods.GetCursorPos(out screenPoint)) return;
+            ProcessIntegrity.EnsureCanAutomate(_targetWindow, _target.DisplayName);
+            if (NativeMethods.GetAncestor(NativeMethods.WindowFromPoint(screenPoint), 2) != _targetWindow)
+                throw new InvalidOperationException("鼠标下方不是目标原厂软件，请移开遮挡窗口后重试。");
             var clientPoint = screenPoint;
             if (!NativeMethods.ScreenToClient(_targetWindow, ref clientPoint)) return;
 
@@ -130,7 +143,7 @@ namespace TangerineRigControl.Automation
             if (!NativeMethods.GetClientRect(_targetWindow, out rect)) return;
             var width = rect.Right - rect.Left;
             var height = rect.Bottom - rect.Top;
-            if (width <= 0 || height <= 0 || clientPoint.X < 0 || clientPoint.Y < 0 || clientPoint.X > width || clientPoint.Y > height)
+            if (width <= 0 || height <= 0 || clientPoint.X < 0 || clientPoint.Y < 0 || clientPoint.X >= width || clientPoint.Y >= height)
             {
                 MessageBox.Show(this, "鼠标需要位于原厂软件窗口内部。", "未记录",
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -143,35 +156,8 @@ namespace TangerineRigControl.Automation
                 RelativeY = (double)clientPoint.Y / height
             };
 
-            try
-            {
-                var element = AutomationElement.FromPoint(new System.Windows.Point(screenPoint.X, screenPoint.Y));
-                if (element != null)
-                {
-                    step.AutomationId = SafeCurrentProperty(element, AutomationElement.AutomationIdProperty);
-                    step.ElementName = SafeCurrentProperty(element, AutomationElement.NameProperty);
-                }
-            }
-            catch
-            {
-                // Custom-drawn applications are expected to fall back to relative coordinates.
-            }
-
             _steps.Add(step);
             RefreshStepList();
-        }
-
-        private static string SafeCurrentProperty(AutomationElement element, AutomationProperty property)
-        {
-            try
-            {
-                var value = element.GetCurrentPropertyValue(property, true);
-                return value == AutomationElement.NotSupported ? string.Empty : Convert.ToString(value);
-            }
-            catch
-            {
-                return string.Empty;
-            }
         }
 
         private void RefreshStepList()
@@ -180,7 +166,7 @@ namespace TangerineRigControl.Automation
             for (var index = 0; index < _steps.Count; index++)
             {
                 var step = _steps[index];
-                var hint = !string.IsNullOrWhiteSpace(step.ElementName) ? step.ElementName : "相对坐标";
+                var hint = "相对坐标";
                 _stepList.Items.Add(string.Format("{0}. {1}  ({2:P0}, {3:P0})", index + 1, hint, step.RelativeX, step.RelativeY));
             }
         }
