@@ -2,13 +2,12 @@ using System;
 using System.IO;
 using System.IO.Pipes;
 using System.Diagnostics;
-using System.Threading;
 using System.Threading.Tasks;
-using System.Net;
-using System.Net.Http;
+
+
 
 using TangerineRigControl.Automation;
-using TangerineRigControl.Services;
+
 using System.Xml.Serialization;
 using TangerineRigControl.Models;
 
@@ -20,7 +19,27 @@ namespace TangerineRigControl.Infrastructure
         {
             try
             {
+                RegressionTests.Run();
                 var original = new RigSettings();
+                var partial = new RigSettings();
+                partial.Kanali.TurnOn.Steps.Add(new MacroStep { RelativeX = 0.2, RelativeY = 0.3 });
+                partial.LConnect.TurnOff.Steps.Add(new MacroStep { RelativeX = 0.4, RelativeY = 0.5 });
+                partial.MotherboardLighting = null;
+                partial.GpuLighting = null;
+                SettingsStore.FillMissingDefaults(partial);
+                if (partial.Kanali.TurnOn.Steps.Count != 1 || partial.LConnect.TurnOff.Steps.Count != 1 ||
+                    partial.MotherboardLighting == null || partial.GpuLighting == null) return 69;
+                var execution = original.GetExecutionTargets();
+                if (execution[2] != original.GpuLighting || execution[3] != original.MotherboardLighting) return 65;
+                if (!TangerineRigControl.Services.AuraLightingClient.IsSupportedType(0x10000) ||
+                    !TangerineRigControl.Services.AuraLightingClient.IsSupportedType(0x70000) ||
+                    !TangerineRigControl.Services.AuraLightingClient.IsSupportedType(0x11000) ||
+                    TangerineRigControl.Services.AuraLightingClient.IsSupportedType(0x20000) ||
+                    TangerineRigControl.Services.AuraLightingClient.IsSupportedType(0x30000)) return 66;
+                var sdkSettings = SettingsStore.Clone(original);
+                if (!sdkSettings.UseAuraSdk) return 67;
+                sdkSettings.UseAuraSdk = false;
+                if (SettingsStore.Clone(sdkSettings).UseAuraSdk) return 68;
                 original.LConnect.TurnOn.Steps.Add(new MacroStep
                 {
                     AutomationId = "test-button",
@@ -29,6 +48,20 @@ namespace TangerineRigControl.Infrastructure
                 });
 
                 var serializer = new XmlSerializer(typeof(RigSettings));
+                // Old two-screen settings must retain their steps when the unused API flag is ignored.
+                using (var legacy = new StringReader("<RigSettings><SignalRgbEnabled>true</SignalRgbEnabled><LConnect><TurnOn><Steps><Step><RelativeX>0.25</RelativeX><RelativeY>0.75</RelativeY></Step></Steps></TurnOn></LConnect></RigSettings>"))
+                {
+                    var migrated = (RigSettings)serializer.Deserialize(legacy);
+                    SettingsStore.Validate(migrated);
+                    if (migrated.GetTargets().Length != 4 || migrated.LConnect.TurnOn.Steps.Count != 1 ||
+                        migrated.LConnect.TurnOn.Steps[0].RelativeX != 0.25 ||
+                        migrated.MotherboardLighting.TurnOn.Steps.Count != 0 || migrated.GpuLighting.TurnOff.Steps.Count != 0) return 62;
+                    var edited = SettingsStore.Clone(migrated);
+                    edited.MotherboardLighting.TurnOn.Steps.Add(new MacroStep());
+                    if (migrated.MotherboardLighting.TurnOn.Steps.Count != 0 || edited.LConnect.TurnOn.Steps.Count != 1) return 63;
+                    edited.GpuLighting.TurnOff.Steps.Add(new MacroStep { RelativeY = double.NaN });
+                    if (!Rejects(delegate { SettingsStore.Validate(edited); })) return 64;
+                }
                 using (var stream = new MemoryStream())
                 {
                     serializer.Serialize(stream, original);
@@ -75,31 +108,12 @@ namespace TangerineRigControl.Infrastructure
                     ExternalAppController.RequiresNativeReopen("L-Connect 3") ||
                     ExternalAppController.RequiresNativeReopen(null)) return 55;
                 if (ExternalAppController.HasVisibleContent(IntPtr.Zero)) return 56;
-                using (var handler = SignalRgbClient.CreateLocalHandler())
-                    if (handler.UseProxy || handler.AllowAutoRedirect) return 41;
-                var transport = new StubHandler(HttpStatusCode.NoContent);
-                using (var client = new SignalRgbClient(transport))
-                {
-                    client.SetEnabledAsync(true).GetAwaiter().GetResult();
-                    if (!transport.ValidRequest || transport.Body != "{\"enabled\":true}") return 42;
-                    client.SetEnabledAsync(false).GetAwaiter().GetResult();
-                    if (transport.Body != "{\"enabled\":false}") return 43;
-                }
-                foreach (var status in new[] { HttpStatusCode.Forbidden, HttpStatusCode.Redirect, HttpStatusCode.InternalServerError })
-                {
-                    using (var client = new SignalRgbClient(new StubHandler(status)))
-                        if (!Rejects(delegate { client.SetEnabledAsync(true).GetAwaiter().GetResult(); })) return 44;
-                }
-                using (var client = new SignalRgbClient(new StubHandler(new HttpRequestException())))
-                    if (!Rejects(delegate { client.SetEnabledAsync(true).GetAwaiter().GetResult(); })) return 45;
-                using (var client = new SignalRgbClient(new StubHandler(new TaskCanceledException())))
-                    if (!Rejects(delegate { client.SetEnabledAsync(true).GetAwaiter().GetResult(); })) return 46;
                 if (!TestLocalRestoreProtocol()) return 61;
                 return 0;
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine("Self-test failed: " + ex.GetType().Name);
+                Console.Error.WriteLine("Self-test failed: " + ex.Message);
                 return 10;
             }
         }
@@ -148,22 +162,5 @@ namespace TangerineRigControl.Infrastructure
             return true;
         }
 
-        private sealed class StubHandler : HttpMessageHandler
-        {
-            private readonly HttpStatusCode _status;
-            private readonly Exception _error;
-            internal bool ValidRequest;
-            internal string Body;
-            internal StubHandler(HttpStatusCode status) { _status = status; }
-            internal StubHandler(Exception error) { _error = error; }
-            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellation)
-            {
-                if (_error != null) throw _error;
-                ValidRequest = request.Method.Method == "PATCH" &&
-                    request.RequestUri.AbsoluteUri == "http://127.0.0.1:16038/api/v1/lighting/enabled";
-                Body = await request.Content.ReadAsStringAsync();
-                return new HttpResponseMessage(_status);
-            }
-        }
     }
 }

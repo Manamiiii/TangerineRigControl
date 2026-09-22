@@ -15,7 +15,9 @@ namespace TangerineRigControl
         {
             if (args != null && args.Length == 1 && string.Equals(args[0], "--self-test", StringComparison.OrdinalIgnoreCase))
             {
-                return SelfTest.Run();
+                var result = SelfTest.Run();
+                if (result != 0) Console.Error.WriteLine("Self-test assertion exit code: " + result);
+                return result;
             }
 
             bool createdNew;
@@ -23,7 +25,7 @@ namespace TangerineRigControl
             {
                 if (!createdNew)
                 {
-                    MessageBox.Show("TangerineRigControl 已经在运行。", "TangerineRigControl",
+                    MessageBox.Show("TangerineRigControl 已经在运行。请双击托盘图标，或按 Ctrl+Alt+F12 显示控制台。", "TangerineRigControl",
                         MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return 2;
                 }
@@ -31,6 +33,7 @@ namespace TangerineRigControl
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
                 var settings = SettingsStore.Load();
+                settings.StartMinimized = args != null && Array.Exists(args, arg => string.Equals(arg, "--startup", StringComparison.OrdinalIgnoreCase));
                 if (!string.IsNullOrEmpty(SettingsStore.LoadWarning))
                     MessageBox.Show(SettingsStore.LoadWarning, "配置读取提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 Application.Run(new MainForm(settings));

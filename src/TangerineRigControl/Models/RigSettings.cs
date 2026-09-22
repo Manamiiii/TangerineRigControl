@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Xml.Serialization;
 
@@ -7,17 +7,34 @@ namespace TangerineRigControl.Models
     [Serializable]
     public sealed class RigSettings
     {
+        public const int CurrentSchemaVersion = 1;
+        public int SchemaVersion { get; set; }
         public bool StartMinimized { get; set; }
         public bool StartWithWindows { get; set; }
         public bool MinimizeVendorAppsAfterAction { get; set; }
-        public bool SignalRgbEnabled { get; set; }
+        public bool UseAuraSdk { get; set; }
+        public ApplicationTarget MotherboardLighting { get; set; }
+        public ApplicationTarget GpuLighting { get; set; }
         public ApplicationTarget LConnect { get; set; }
         public ApplicationTarget Kanali { get; set; }
 
+        public ApplicationTarget[] GetTargets()
+        {
+            return new[] { LConnect, Kanali, MotherboardLighting, GpuLighting };
+        }
+
+        public ApplicationTarget[] GetExecutionTargets()
+        {
+            return new[] { LConnect, Kanali, GpuLighting, MotherboardLighting };
+        }
+
         public RigSettings()
         {
+            SchemaVersion = CurrentSchemaVersion;
             MinimizeVendorAppsAfterAction = true;
-            SignalRgbEnabled = true;
+            UseAuraSdk = true;
+            MotherboardLighting = new ApplicationTarget { DisplayName = "主板＋内存灯光" };
+            GpuLighting = new ApplicationTarget { DisplayName = "显卡灯光" };
             LConnect = new ApplicationTarget
             {
                 DisplayName = "联力副屏",
@@ -72,6 +89,7 @@ namespace TangerineRigControl.Models
     [Serializable]
     public sealed class MacroStep
     {
+        // XML compatibility only: playback intentionally uses coordinates, not selectors.
         public string AutomationId { get; set; }
         public string ElementName { get; set; }
         public bool? DesiredToggleState { get; set; }

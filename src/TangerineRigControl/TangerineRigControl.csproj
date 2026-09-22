@@ -11,7 +11,7 @@
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Deterministic>true</Deterministic>
     <LangVersion>5</LangVersion>
-    <ApplicationIcon />
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
@@ -31,7 +31,7 @@
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Drawing" />
-    <Reference Include="System.Net.Http" />
+
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
     <Reference Include="UIAutomationClient" />
@@ -48,14 +48,20 @@
     <Compile Include="Infrastructure\LConnectWindowRestorer.cs" />
     <Compile Include="Infrastructure\SettingsStore.cs" />
     <Compile Include="Infrastructure\SelfTest.cs" />
+    <Compile Include="Infrastructure\RegressionTests.cs" />
     <Compile Include="Infrastructure\StartupManager.cs" />
     <Compile Include="Models\RigSettings.cs" />
-    <Compile Include="Services\SignalRgbClient.cs" />
+
+    <Compile Include="Services\AuraLightingClient.cs" />
+    <Compile Include="Services\AuraSession.cs" />
     <Compile Include="UI\MainForm.cs" />
     <Compile Include="UI\SettingsForm.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <None Include="app.manifest" />
+    <EmbeddedResource Include="Assets\app.ico">
+      <LogicalName>TangerineRigControl.AppIcon</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

@@ -6,6 +6,12 @@ namespace TangerineRigControl.Infrastructure
 {
     internal static class InstalledAppLocator
     {
+        internal static string WindowProcessName(string executable)
+        {
+            var name = Path.GetFileNameWithoutExtension(executable);
+            return string.Equals(name, "iGCBootstrapper", StringComparison.OrdinalIgnoreCase) ? "iGC.Lite" : name;
+        }
+
         private static readonly string[] RegistryPaths =
         {
             @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
@@ -33,7 +39,7 @@ namespace TangerineRigControl.Infrastructure
                                 if (!string.Equals(candidateName, displayName, StringComparison.OrdinalIgnoreCase)) continue;
 
                                 var icon = CleanExecutableValue(Convert.ToString(key.GetValue("DisplayIcon")));
-                                if (File.Exists(icon)) return icon;
+                                if (string.Equals(Path.GetExtension(icon), ".exe", StringComparison.OrdinalIgnoreCase) && File.Exists(icon)) return icon;
 
                                 var location = Convert.ToString(key.GetValue("InstallLocation"));
                                 var probablePath = Path.Combine(location ?? string.Empty, displayName + ".exe");

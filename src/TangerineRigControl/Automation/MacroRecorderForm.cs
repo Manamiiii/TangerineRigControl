@@ -1,7 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using TangerineRigControl.Infrastructure;
 using TangerineRigControl.Models;
@@ -17,6 +18,9 @@ namespace TangerineRigControl.Automation
         private readonly List<MacroStep> _steps = new List<MacroStep>();
         private readonly ListBox _stepList = new ListBox();
         private IntPtr _targetWindow;
+        private uint _targetProcess;
+        private readonly CancellationTokenSource _lifetime = new CancellationTokenSource();
+        private bool _starting;
 
         public MacroRecorderForm(ApplicationTarget target, MacroDefinition macro)
         {
@@ -24,7 +28,8 @@ namespace TangerineRigControl.Automation
             _macro = macro;
             Text = "录制“" + target.DisplayName + " - " + macro.Name + "”";
             StartPosition = FormStartPosition.Manual;
-            Location = new Point(Screen.PrimaryScreen.WorkingArea.Right - 390, Screen.PrimaryScreen.WorkingArea.Top + 40);
+            var area = Screen.FromPoint(Cursor.Position).WorkingArea;
+            Location = new Point(Math.Max(area.Left, area.Right - 390), area.Top + 40);
             Size = new Size(360, 390);
             TopMost = true;
             FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -41,7 +46,7 @@ namespace TangerineRigControl.Automation
                 Text = "1. 在原厂软件中回到稳定的起始页面。\r\n" +
                        "2. 鼠标移到要点击的位置，按 F8 记录。\r\n" +
                        "3. 手动点击该位置进入下一页，再重复记录。\r\n" +
-                       "4. 完成后点“保存序列”。",
+                       "4. 完成后点“保存序列”。每步默认等待 900ms。",
                 ForeColor = Color.Gainsboro
             };
 
@@ -92,27 +97,38 @@ namespace TangerineRigControl.Automation
             BeginInvoke(new MethodInvoker(StartRecording));
         }
 
-        private void StartRecording()
+        private async void StartRecording()
         {
             if (IsDisposed || Disposing) return;
+            _starting = true;
+            var token = _lifetime.Token;
             try
             {
-                _targetWindow = _apps.OpenAndFindWindow(_target, 10000);
+                Text = "正在打开原厂软件…（可取消）";
+                _targetWindow = await Task.Run(delegate { return _apps.OpenAndFindWindow(_target, 10000, token); });
+                if (IsDisposed || token.IsCancellationRequested) return;
+                NativeMethods.GetWindowThreadProcessId(_targetWindow, out _targetProcess);
                 if (!NativeMethods.RegisterHotKey(Handle, HotkeyId, NativeMethods.ModNoRepeat, NativeMethods.VkF8))
                     throw new InvalidOperationException("F8 已被占用，无法开始录制。请关闭占用快捷键的软件后重试。");
                 // TopMost keeps the recorder available without reactivating its owner over the vendor.
-                _apps.Show(_targetWindow);
+                await Task.Run(delegate { _apps.Show(_targetWindow, token); });
+                if (!IsDisposed) Text = "录制“" + _target.DisplayName + " - " + _macro.Name + "”";
             }
+            catch (OperationCanceledException) { }
             catch (Exception ex)
             {
+                if (IsDisposed) return;
                 MessageBox.Show(this, ex.Message, "无法开始录制", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 DialogResult = DialogResult.Cancel;
                 Close();
             }
+            finally { _starting = false; if (IsDisposed) _lifetime.Dispose(); }
         }
 
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
+            _lifetime.Cancel();
+            if (!_starting) _lifetime.Dispose();
             NativeMethods.UnregisterHotKey(Handle, HotkeyId);
             base.OnFormClosed(e);
         }
@@ -132,15 +148,19 @@ namespace TangerineRigControl.Automation
         {
             if (_steps.Count >= 200) throw new InvalidOperationException("每条序列最多记录 200 步。");
             var screenPoint = new NativeMethods.Point();
-            if (!NativeMethods.GetCursorPos(out screenPoint)) return;
+            if (!NativeMethods.GetCursorPos(out screenPoint)) throw new InvalidOperationException("无法读取鼠标位置，请重试。");
+            uint actualProcess;
+            NativeMethods.GetWindowThreadProcessId(_targetWindow, out actualProcess);
+            if (actualProcess != _targetProcess || !NativeMethods.IsWindow(_targetWindow))
+                throw new InvalidOperationException("录制目标已退出或变化，请重新开始录制。");
             ProcessIntegrity.EnsureCanAutomate(_targetWindow, _target.DisplayName);
             if (NativeMethods.GetAncestor(NativeMethods.WindowFromPoint(screenPoint), 2) != _targetWindow)
                 throw new InvalidOperationException("鼠标下方不是目标原厂软件，请移开遮挡窗口后重试。");
             var clientPoint = screenPoint;
-            if (!NativeMethods.ScreenToClient(_targetWindow, ref clientPoint)) return;
+            if (!NativeMethods.ScreenToClient(_targetWindow, ref clientPoint)) throw new InvalidOperationException("无法转换坐标，请重试。");
 
             NativeMethods.Rect rect;
-            if (!NativeMethods.GetClientRect(_targetWindow, out rect)) return;
+            if (!NativeMethods.GetClientRect(_targetWindow, out rect)) throw new InvalidOperationException("无法读取窗口尺寸，请重试。");
             var width = rect.Right - rect.Left;
             var height = rect.Bottom - rect.Top;
             if (width <= 0 || height <= 0 || clientPoint.X < 0 || clientPoint.Y < 0 || clientPoint.X >= width || clientPoint.Y >= height)

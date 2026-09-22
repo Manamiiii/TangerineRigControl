@@ -11,6 +11,7 @@ permissions:
 jobs:
   windows:
     runs-on: windows-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
       - name: Setup MSBuild
@@ -20,7 +21,11 @@ jobs:
       - name: Run self-test
         shell: pwsh
         run: |
-          $process = Start-Process src/TangerineRigControl/bin/Release/TangerineRigControl.exe -ArgumentList '--self-test' -Wait -PassThru
+          $process = Start-Process src/TangerineRigControl/bin/Release/TangerineRigControl.exe -ArgumentList '--self-test' -PassThru -RedirectStandardOutput self-test.out -RedirectStandardError self-test.err
+          if (-not $process.WaitForExit(60000)) { $process.Kill(); throw 'Self-test timed out after 60 seconds.' }
+          $process.WaitForExit()
+          Get-Content self-test.out,self-test.err
+          Write-Output "Self-test exit code: $($process.ExitCode)"
           if ($process.ExitCode -ne 0) { exit $process.ExitCode }
       - name: Upload portable executable
         uses: actions/upload-artifact@v7

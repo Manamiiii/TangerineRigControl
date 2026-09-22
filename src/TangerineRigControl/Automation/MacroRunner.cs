@@ -16,11 +16,11 @@ namespace TangerineRigControl.Automation
             SettingsStore.ValidateMacro(macro);
             if (macro.Steps.Count == 0) throw new InvalidOperationException(target.DisplayName + "尚未录制该操作。");
             cancellation.ThrowIfCancellationRequested();
-            var handle = _apps.OpenAndFindWindow(target, 10000);
+            var handle = _apps.OpenAndFindWindow(target, 10000, cancellation);
             uint processId;
             NativeMethods.GetWindowThreadProcessId(handle, out processId);
-            _apps.Show(handle);
-            Wait(Math.Max(300, target.InitialDelayMilliseconds), cancellation);
+            _apps.Show(handle, cancellation);
+            Wait(target.InitialDelayMilliseconds, cancellation);
             for (var index = 0; index < macro.Steps.Count; index++)
             {
                 cancellation.ThrowIfCancellationRequested();
@@ -29,7 +29,7 @@ namespace TangerineRigControl.Automation
                 {
                     var step = macro.Steps[index];
                     ClickRelative(handle, step.RelativeX, step.RelativeY);
-                    Wait(Math.Max(100, step.DelayAfterMilliseconds), cancellation);
+                    Wait(step.DelayAfterMilliseconds, cancellation);
                 }
                 catch (OperationCanceledException) { throw; }
                 catch (Exception ex)
@@ -37,8 +37,14 @@ namespace TangerineRigControl.Automation
                     throw new InvalidOperationException("第 " + (index + 1) + " 步停止：" + ex.Message, ex);
                 }
             }
-            EnsureWindow(handle, processId);
-            if (minimizeAfterAction) _apps.Minimize(handle);
+            cancellation.ThrowIfCancellationRequested();
+            // No further click is sent: the last action is allowed to hide/close its own window.
+            if (minimizeAfterAction && NativeMethods.IsWindow(handle) && NativeMethods.IsWindowVisible(handle))
+            {
+                uint actualProcess;
+                NativeMethods.GetWindowThreadProcessId(handle, out actualProcess);
+                if (actualProcess == processId) _apps.Minimize(handle, cancellation);
+            }
         }
 
         internal static void EnsureWindow(IntPtr handle, uint expectedProcess)

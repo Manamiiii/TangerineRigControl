@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Threading.Tasks;
@@ -9,6 +9,7 @@ using TangerineRigControl.Infrastructure;
 using TangerineRigControl.Models;
 using TangerineRigControl.Services;
 
+
 namespace TangerineRigControl.UI
 {
     internal sealed class MainForm : Form
@@ -17,25 +18,31 @@ namespace TangerineRigControl.UI
         private const int HotkeyAllOff = 0x5451;
         private const int HotkeyShow = 0x5452;
         private RigSettings _settings;
-        private readonly SignalRgbClient _signalRgb = new SignalRgbClient();
+        private readonly AuraSession _aura = new AuraSession();
+
         private readonly MacroRunner _macroRunner = new MacroRunner();
         private readonly ExternalAppController _apps = new ExternalAppController();
-        private readonly Label _status;
+        private readonly TextBox _status;
+        private bool _shutdownStarted;
+        private bool _shutdownReady;
         private readonly NotifyIcon _trayIcon;
         private bool _allowClose;
         private bool _busy;
         private bool _editing;
         private CancellationTokenSource _operation;
         private string _hotkeyWarning = string.Empty;
-        private readonly Button _stop = CreateButton("停止操作", 38, 452, 122, false);
+        private readonly Button _stop = CreateButton("停止操作", 38, 544, 122, false);
 
         public MainForm(RigSettings settings)
         {
             _settings = settings;
             Text = "TangerineRigControl";
+            using (var stream = typeof(MainForm).Assembly.GetManifestResourceStream("TangerineRigControl.AppIcon"))
+            using (var source = new Icon(stream))
+                Icon = (Icon)source.Clone();
             StartPosition = FormStartPosition.CenterScreen;
-            Size = new Size(760, 530);
-            MinimumSize = new Size(760, 530);
+            Size = new Size(760, 700);
+            MinimumSize = new Size(760, 700);
             BackColor = Color.FromArgb(25, 28, 33);
             ForeColor = Color.White;
             Font = new Font("Microsoft YaHei UI", 9F);
@@ -66,15 +73,16 @@ namespace TangerineRigControl.UI
             allOn.Click += async delegate { await RunAllAsync(true); };
             allOff.Click += async delegate { await RunAllAsync(false); };
 
-            Controls.Add(CreateDeviceRow("RGB 灯光", "SignalRGB 本地接口", 116,
-                async enabled => await SetLightsAsync(enabled), delegate { OpenSignalRgb(); }));
-            Controls.Add(CreateDeviceRow("联力副屏", "L-Connect 3", 208,
-                async enabled => await RunMacroAsync(_settings.LConnect, enabled), delegate { OpenVendor(_settings.LConnect); }));
-            Controls.Add(CreateDeviceRow("TRYX 曲面屏", "KANALI", 300,
-                async enabled => await RunMacroAsync(_settings.Kanali, enabled), delegate { OpenVendor(_settings.Kanali); }));
-
-            var settingsButton = CreateButton("设置与录制", 38, 410, 122, false);
-            settingsButton.Click += delegate
+            Controls.Add(CreateDeviceRow("联力副屏", "L-Connect 3 · 坐标录制", 116,
+                async enabled => await RunDeviceAsync(_settings.LConnect, enabled), delegate { OpenVendor(_settings.LConnect); }));
+            Controls.Add(CreateDeviceRow("TRYX 曲面屏", "KANALI · 坐标录制", 208,
+                async enabled => await RunDeviceAsync(_settings.Kanali, enabled), delegate { OpenVendor(_settings.Kanali); }));
+            Controls.Add(CreateDeviceRow("主板＋内存灯光", "Aura SDK / 录制备用", 300,
+                async enabled => await RunDeviceAsync(_settings.MotherboardLighting, enabled), delegate { OpenVendor(_settings.MotherboardLighting); }));
+            Controls.Add(CreateDeviceRow("显卡灯光", "iGC.Lite · 坐标录制", 392,
+                async enabled => await RunDeviceAsync(_settings.GpuLighting, enabled), delegate { OpenVendor(_settings.GpuLighting); }));
+            var settingsButton = CreateButton("设置与录制", 38, 502, 122, false);
+            settingsButton.Click += async delegate
             {
                 if (_busy || _editing) return;
                 _editing = true;
@@ -82,20 +90,32 @@ namespace TangerineRigControl.UI
                 {
                     using (var form = new SettingsForm(_settings))
                     {
-                        if (form.ShowDialog(this) == DialogResult.OK) _settings = form.SavedSettings;
+                        if (form.ShowDialog(this) == DialogResult.OK)
+                        {
+                            var releaseAura = _settings.UseAuraSdk && !form.SavedSettings.UseAuraSdk;
+                            _settings = form.SavedSettings;
+                            if (releaseAura) await Task.Run(delegate { _aura.ReleaseExisting(); });
+                        }
                     }
                     SetStatus(InitialStatus());
                 }
+                catch (Exception ex) { SetStatus(ex.Message); }
                 finally { _editing = false; }
             };
 
-            _status = new Label
+            _status = new TextBox
             {
                 Text = InitialStatus(),
-                Location = new Point(180, 417),
-                Size = new Size(526, 70),
+                Location = new Point(180, 509),
+                Size = new Size(526, 140),
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                Multiline = true,
+                ReadOnly = true,
+                ScrollBars = ScrollBars.Vertical,
+                BackColor = BackColor,
+                BorderStyle = BorderStyle.None,
                 ForeColor = Color.FromArgb(166, 171, 179),
-                TextAlign = ContentAlignment.TopRight
+                TabStop = true
             };
 
             Controls.Add(accent);
@@ -119,7 +139,7 @@ namespace TangerineRigControl.UI
             _trayIcon = new NotifyIcon
             {
                 Text = "TangerineRigControl",
-                Icon = SystemIcons.Application,
+                Icon = Icon,
                 Visible = true,
                 ContextMenuStrip = trayMenu
             };
@@ -146,7 +166,8 @@ namespace TangerineRigControl.UI
             {
                 if (_operation != null) _operation.Cancel();
                 if (_trayIcon != null) _trayIcon.Dispose();
-                _signalRgb.Dispose();
+                _aura.Dispose();
+
             }
             base.Dispose(disposing);
         }
@@ -206,6 +227,7 @@ namespace TangerineRigControl.UI
             {
                 Location = new Point(38, y),
                 Size = new Size(668, 76),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                 BackColor = Color.FromArgb(35, 39, 45)
             };
             panel.Controls.Add(new Label
@@ -225,6 +247,7 @@ namespace TangerineRigControl.UI
             var on = CreateButton("开启", 432, 20, 66, true);
             var off = CreateButton("关闭", 506, 20, 66, false);
             var detail = CreateButton("设置", 580, 20, 66, false);
+            on.Anchor = off.Anchor = detail.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             on.Click += async delegate { if (!_busy) await toggle(true); };
             off.Click += async delegate { if (!_busy) await toggle(false); };
             detail.Click += delegate { open(); };
@@ -236,35 +259,22 @@ namespace TangerineRigControl.UI
 
         private async Task RunAllAsync(bool enabled)
         {
-            if (_busy || _editing) return;
-            _busy = true;
-            _operation = new CancellationTokenSource();
-            _stop.Enabled = true;
-            SetStatus(enabled ? "正在开启全部设备…" : "正在关闭全部设备…");
-            var errors = new List<string>();
-            try
+            await RunBusyAsync(enabled ? "正在开启全部设备…" : "正在关闭全部设备…", async delegate
             {
-                if (_settings.SignalRgbEnabled)
+                var errors = new List<string>();
+                foreach (var target in _settings.GetExecutionTargets())
                 {
-                    try { await _signalRgb.SetEnabledAsync(enabled); }
-                    catch (Exception ex) { errors.Add("灯光：" + ex.Message); }
+                    _operation.Token.ThrowIfCancellationRequested();
+                    await TryRunDeviceAsync(target, enabled, errors);
                 }
-                _operation.Token.ThrowIfCancellationRequested();
-                await TryRunMacroAsync(_settings.LConnect, enabled, errors);
-                _operation.Token.ThrowIfCancellationRequested();
-                await TryRunMacroAsync(_settings.Kanali, enabled, errors);
-                _operation.Token.ThrowIfCancellationRequested();
-                SetStatus(errors.Count == 0 ? "全部操作已执行；屏幕实际状态待确认" : string.Join("  |  ", errors));
-            }
-            catch (OperationCanceledException) { SetStatus("操作已停止，部分步骤可能已生效，请确认设备状态。"); }
-            catch (Exception ex) { SetStatus(ex.Message); }
-            finally { EndOperation(); }
+                return string.Join(Environment.NewLine, errors);
+            });
         }
 
-        private async Task TryRunMacroAsync(ApplicationTarget target, bool enabled, IList<string> errors)
+        private async Task TryRunDeviceAsync(ApplicationTarget target, bool enabled, IList<string> errors)
         {
             var macro = enabled ? target.TurnOn : target.TurnOff;
-            if (macro == null || macro.Steps == null || macro.Steps.Count == 0)
+            if (!(_settings.UseAuraSdk && target == _settings.MotherboardLighting) && (macro == null || macro.Steps == null || macro.Steps.Count == 0))
             {
                 errors.Add(target.DisplayName + "：尚未录制");
                 return;
@@ -272,44 +282,46 @@ namespace TangerineRigControl.UI
 
             try
             {
-                await Task.Run(delegate { _macroRunner.Run(target, macro, _settings.MinimizeVendorAppsAfterAction, _operation.Token); });
+                var result = await Task.Run(delegate { return RunTarget(target, macro, enabled); });
+                errors.Add(target.DisplayName + "：" + result);
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
+                if (_operation.IsCancellationRequested) throw;
                 errors.Add(target.DisplayName + "：" + ex.Message);
             }
         }
 
-        private async Task SetLightsAsync(bool enabled)
+        private string RunTarget(ApplicationTarget target, MacroDefinition macro, bool enabled)
         {
-            if (!_settings.SignalRgbEnabled)
+            if (_settings.UseAuraSdk && target == _settings.MotherboardLighting)
+                return _aura.SetEnabled(enabled, _operation.Token);
+            else
             {
-                SetStatus("SignalRGB 本地接口已在设置中关闭。");
-                return;
+                _macroRunner.Run(target, macro, _settings.MinimizeVendorAppsAfterAction, _operation.Token);
+                return "序列已执行；实际状态待确认";
             }
-            await RunBusyAsync(enabled ? "正在开启灯光…" : "正在关闭灯光…",
-                async delegate { await _signalRgb.SetEnabledAsync(enabled); }, enabled ? "灯光已开启" : "灯光已关闭");
         }
 
-        private async Task RunMacroAsync(ApplicationTarget target, bool enabled)
+        private async Task RunDeviceAsync(ApplicationTarget target, bool enabled)
         {
             var macro = enabled ? target.TurnOn : target.TurnOff;
             await RunBusyAsync("正在操作" + target.DisplayName + "…",
-                async delegate { await Task.Run(delegate { _macroRunner.Run(target, macro, _settings.MinimizeVendorAppsAfterAction, _operation.Token); }); },
-                target.DisplayName + (enabled ? "开启" : "关闭") + "操作已执行；实际状态待确认");
+                async delegate { return await Task.Run(delegate { return RunTarget(target, macro, enabled); }); });
         }
 
-        private async Task RunBusyAsync(string progress, Func<Task> action, string success)
+        private async Task RunBusyAsync(string progress, Func<Task<string>> action)
         {
             if (_busy || _editing) return;
             _busy = true;
             _operation = new CancellationTokenSource();
             _stop.Enabled = true;
+            SetActionButtonsEnabled(false);
             SetStatus(progress);
             try
             {
-                await action();
+                var success = await action();
                 _operation.Token.ThrowIfCancellationRequested();
                 SetStatus(success);
             }
@@ -329,34 +341,25 @@ namespace TangerineRigControl.UI
             _busy = false;
             if (_operation != null) { _operation.Dispose(); _operation = null; }
             if (!IsDisposed) _stop.Enabled = false;
+            if (!IsDisposed) SetActionButtonsEnabled(true);
         }
 
-        private void OpenVendor(ApplicationTarget target)
+        private async void OpenVendor(ApplicationTarget target)
         {
-            if (_busy || _editing) return;
-            try { _apps.Show(_apps.OpenAndFindWindow(target, 10000)); }
-            catch (Exception ex) { SetStatus(ex.Message); }
-        }
-
-        private void OpenSignalRgb()
-        {
-            if (_busy || _editing) return;
-            try
+            await RunBusyAsync("正在打开" + target.DisplayName + "…", async delegate
             {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("signalrgb://") { UseShellExecute = true });
-            }
-            catch
-            {
-                SetStatus("没有找到 SignalRGB，请先安装或从开始菜单打开。");
-            }
+                await Task.Run(delegate { _apps.Show(_apps.OpenAndFindWindow(target, 10000, _operation.Token), _operation.Token); });
+                return "原厂软件已打开。";
+            });
         }
 
         private string InitialStatus()
         {
             if (!string.IsNullOrEmpty(_hotkeyWarning)) return _hotkeyWarning;
-            var lian = _settings.LConnect.TurnOn.Steps.Count > 0 && _settings.LConnect.TurnOff.Steps.Count > 0;
-            var kanali = _settings.Kanali.TurnOn.Steps.Count > 0 && _settings.Kanali.TurnOff.Steps.Count > 0;
-            return lian && kanali ? "控制序列已就绪" : "请先进入“设置与录制”校准屏幕开关";
+            var ready = 0;
+            foreach (var target in _settings.GetTargets())
+                if ((_settings.UseAuraSdk && target == _settings.MotherboardLighting) || (target.TurnOn.Steps.Count > 0 && target.TurnOff.Steps.Count > 0)) ready++;
+            return "已配置：" + ready + "/4（不代表设备已连接）；SDK：" + (_settings.UseAuraSdk ? "已选用" : "未选用") + "。未配置项目请进入设置与录制。";
         }
 
         private void SetStatus(string text)
@@ -373,16 +376,43 @@ namespace TangerineRigControl.UI
             Activate();
         }
 
-        private void OnFormClosing(object sender, FormClosingEventArgs e)
+        private async void OnFormClosing(object sender, FormClosingEventArgs e)
         {
             if (_allowClose || e.CloseReason == CloseReason.WindowsShutDown)
             {
+                if (_shutdownReady) return;
+                e.Cancel = true;
+                if (_shutdownStarted) return;
+                _shutdownStarted = true;
+                _editing = true;
+                SetActionButtonsEnabled(false);
                 if (_operation != null) _operation.Cancel();
+                SetStatus("正在释放 SDK 控制权…");
+                await Task.Yield();
+                var released = await _aura.CloseAsync(3000);
+                if (!released)
+                {
+                    SetStatus("SDK 未确认释放，底层调用可能仍在执行；退出后请检查原厂灯效。");
+                    await Task.Delay(1500);
+                }
+                _shutdownReady = true;
+                _allowClose = true;
+                Close();
                 return;
             }
             e.Cancel = true;
             Hide();
             _trayIcon.ShowBalloonTip(1200, "TangerineRigControl", "控制台仍在托盘中运行。", ToolTipIcon.Info);
+        }
+
+        private void SetActionButtonsEnabled(bool enabled)
+        {
+            enabled = enabled && !_shutdownStarted;
+            foreach (Control control in Controls)
+            {
+                if (control is Button && control != _stop) control.Enabled = enabled;
+                foreach (Control child in control.Controls) if (child is Button) child.Enabled = enabled;
+            }
         }
 
         private static Button CreateButton(string text, int x, int y, int width, bool accent)

@@ -88,9 +88,6 @@ namespace TangerineRigControl.Infrastructure
         [DllImport("user32.dll")]
         internal static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
 
-        [DllImport("user32.dll")]
-        internal static extern bool ShowWindow(IntPtr hWnd, int command);
-
         [DllImport("user32.dll", SetLastError = true)]
         internal static extern bool PostMessage(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam);
 

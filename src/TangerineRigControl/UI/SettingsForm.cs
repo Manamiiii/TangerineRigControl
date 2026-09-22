@@ -1,8 +1,11 @@
-﻿using System;
+using System;
 using System.Drawing;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Windows.Forms;
+using System.Threading;
+using System.Threading.Tasks;
 using TangerineRigControl.Automation;
 using TangerineRigControl.Infrastructure;
 using TangerineRigControl.Models;
@@ -13,11 +16,12 @@ namespace TangerineRigControl.UI
     {
         private readonly RigSettings _settings;
         internal RigSettings SavedSettings { get { return _settings; } }
-        private readonly TextBox _lianPath;
-        private readonly TextBox _kanaliPath;
-        private readonly CheckBox _signalRgb;
+        private readonly Dictionary<ApplicationTarget, TextBox> _paths = new Dictionary<ApplicationTarget, TextBox>();
         private readonly CheckBox _minimizeApps;
+        private readonly CheckBox _useAuraSdk;
         private readonly CheckBox _startWithWindows;
+        private readonly CancellationTokenSource _lifetime = new CancellationTokenSource();
+        private bool _opening;
 
         public SettingsForm(RigSettings settings)
         {
@@ -25,8 +29,9 @@ namespace TangerineRigControl.UI
             _settings = settings;
             Text = "TangerineRigControl 设置";
             StartPosition = FormStartPosition.CenterParent;
-            Size = new Size(690, 510);
-            MinimumSize = new Size(690, 510);
+            Size = new Size(720, 570);
+            MinimumSize = new Size(720, 570);
+            Font = new Font("Microsoft YaHei UI", 9F);
             BackColor = Color.FromArgb(30, 33, 38);
             ForeColor = Color.White;
 
@@ -45,13 +50,8 @@ namespace TangerineRigControl.UI
                 AutoSize = true
             };
 
-            _signalRgb = new CheckBox
-            {
-                Text = "启用 SignalRGB 本地接口（仅访问 127.0.0.1）",
-                Checked = settings.SignalRgbEnabled,
-                Location = new Point(30, 92),
-                Size = new Size(430, 26)
-            };
+            _useAuraSdk = new CheckBox { Text = "华硕主板＋内存使用 Aura SDK（取消则使用录制）", Checked = settings.UseAuraSdk, Location = new Point(30, 92), Size = new Size(590, 26) };
+            Controls.Add(_useAuraSdk);
             _minimizeApps = new CheckBox
             {
                 Text = "操作完成后最小化原厂软件",
@@ -67,20 +67,30 @@ namespace TangerineRigControl.UI
                 Size = new Size(280, 26)
             };
 
-            var lianGroup = CreateAppGroup(settings.LConnect, 30, 158, out _lianPath);
-            var kanaliGroup = CreateAppGroup(settings.Kanali, 30, 283, out _kanaliPath);
-
-            var save = CreateButton("保存", 500, 423, 72, true);
+            Controls.Add(new Label { Text = "SDK 关闭需保持控制台运行；开启/退出会释放控制权，恢复默认灯效。\r\n登录启动不自动提权；原厂软件以管理员运行时，请手动以管理员启动控制台。", Location = new Point(30, 152), Size = new Size(650, 44) });
+            var tabs = new TabControl { Location = new Point(30, 202), Size = new Size(650, 230), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
+            foreach (var target in settings.GetTargets())
+            {
+                var page = new TabPage(target.DisplayName) { BackColor = BackColor, ForeColor = ForeColor };
+                TextBox pathBox;
+                var group = CreateAppGroup(target, 0, 12, out pathBox);
+                _paths.Add(target, pathBox);
+                page.Controls.Add(group);
+                page.Controls.Add(new Label { Text = "只录制灯光或屏幕开关，完成后保存设置。", Location = new Point(16, 140), AutoSize = true });
+                tabs.TabPages.Add(page);
+            }
+            var save = CreateButton("保存", 500, 483, 72, true);
+            save.Enabled = SettingsStore.CanSave;
             save.Click += delegate
             {
-                settings.SignalRgbEnabled = _signalRgb.Checked;
+
+                settings.UseAuraSdk = _useAuraSdk.Checked;
                 settings.MinimizeVendorAppsAfterAction = _minimizeApps.Checked;
-                settings.LConnect.ExecutablePath = _lianPath.Text.Trim();
-                settings.Kanali.ExecutablePath = _kanaliPath.Text.Trim();
                 settings.StartWithWindows = _startWithWindows.Checked;
-                settings.StartMinimized = _startWithWindows.Checked;
                 try
                 {
+                    if (_opening) return;
+                    foreach (var target in settings.GetTargets()) ApplyPath(target);
                     SettingsStore.Validate(settings);
                     var previousStartup = StartupManager.ReadValue();
                     StartupManager.SetEnabled(_startWithWindows.Checked);
@@ -100,27 +110,31 @@ namespace TangerineRigControl.UI
                 DialogResult = DialogResult.OK;
                 Close();
             };
-            var cancel = CreateButton("取消", 580, 423, 72, false);
+            var cancel = CreateButton("取消", 580, 483, 72, false);
             cancel.Click += delegate { DialogResult = DialogResult.Cancel; Close(); };
-            var diagnostics = CreateButton("复制脱敏诊断", 30, 423, 130, false);
+            var diagnostics = CreateButton("复制脱敏诊断", 30, 483, 130, false);
             diagnostics.Click += delegate
             {
-                Clipboard.SetText(BuildSanitizedDiagnostics());
+                try { Clipboard.SetText(BuildSanitizedDiagnostics()); }
+                catch (System.Runtime.InteropServices.ExternalException)
+                {
+                    MessageBox.Show(this, "剪贴板暂时被占用，请稍后重试。", "未复制");
+                    return;
+                }
                 MessageBox.Show(this, "诊断信息已复制。内容不包含程序路径、用户名、设备标识或录制坐标。",
                     "已复制", MessageBoxButtons.OK, MessageBoxIcon.Information);
             };
 
             Controls.Add(title);
             Controls.Add(privacy);
-            Controls.Add(_signalRgb);
+
             Controls.Add(_minimizeApps);
             Controls.Add(_startWithWindows);
-            Controls.Add(lianGroup);
-            Controls.Add(kanaliGroup);
+            Controls.Add(tabs);
             Controls.Add(new Label
             {
-                Text = "录制和清除仅修改草稿；点击“保存”生效，点击“取消”可撤销。",
-                Location = new Point(30, 402),
+                Text = SettingsStore.CanSave ? "录制和清除仅修改草稿；点击“保存”生效，点击“取消”可撤销。" : "配置恢复保护中：请先恢复有效配置后重启，当前禁止保存。",
+                Location = new Point(30, 450),
                 AutoSize = true,
                 ForeColor = Color.Silver
             });
@@ -136,6 +150,7 @@ namespace TangerineRigControl.UI
                 Text = target.DisplayName,
                 Location = new Point(x, y),
                 Size = new Size(622, 112),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                 ForeColor = Color.White
             };
             pathBox = new TextBox
@@ -144,17 +159,27 @@ namespace TangerineRigControl.UI
                 Location = new Point(16, 27),
                 Size = new Size(496, 25),
                 ReadOnly = true,
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                 BackColor = Color.FromArgb(45, 48, 54),
                 ForeColor = Color.Gainsboro,
                 BorderStyle = BorderStyle.FixedSingle
             };
             var browse = CreateButton("浏览…", 520, 25, 82, false);
+            browse.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             var capturedPathBox = pathBox;
             browse.Click += delegate
             {
                 using (var dialog = new OpenFileDialog { Filter = "Windows 程序 (*.exe)|*.exe", CheckFileExists = true })
                 {
-                    if (dialog.ShowDialog(this) == DialogResult.OK) capturedPathBox.Text = dialog.FileName;
+                    if (dialog.ShowDialog(this) == DialogResult.OK)
+                    {
+                        if (!string.Equals(capturedPathBox.Text, dialog.FileName, StringComparison.OrdinalIgnoreCase) &&
+                            (target.TurnOn.Steps.Count > 0 || target.TurnOff.Steps.Count > 0))
+                        {
+                            if (MessageBox.Show(this, "已有坐标将保留。新程序的页面布局可能不同，必须复核序列后再执行。是否更换路径？", "更换原厂程序", MessageBoxButtons.OKCancel) != DialogResult.OK) return;
+                        }
+                        capturedPathBox.Text = dialog.FileName;
+                    }
                 }
             };
 
@@ -163,6 +188,7 @@ namespace TangerineRigControl.UI
             var off = CreateButton("录制关闭（" + target.TurnOff.Steps.Count + " 步）", 212, 65, 130, false);
             var clearOff = CreateButton("清除", 346, 65, 52, false);
             var open = CreateButton("打开原厂软件", 432, 65, 170, false);
+            open.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             on.Click += delegate { Record(target, target.TurnOn, on, "录制开启"); };
             off.Click += delegate { Record(target, target.TurnOff, off, "录制关闭"); };
             clearOn.AccessibleName = target.DisplayName + "清除开启序列";
@@ -177,14 +203,23 @@ namespace TangerineRigControl.UI
                 target.TurnOff.Steps.Clear();
                 off.Text = "录制关闭（0 步）";
             };
-            open.Click += delegate
+            open.Click += async delegate
             {
+                if (_opening) return;
+                _opening = true;
+                open.Enabled = false;
+                var token = _lifetime.Token;
                 try
                 {
-                    target.ExecutablePath = capturedPathBox.Text.Trim();
-                    new ExternalAppController().Show(new ExternalAppController().OpenAndFindWindow(target, 10000));
+                    ApplyPath(target);
+                    var apps = new ExternalAppController();
+                    var launchTarget = new ApplicationTarget { DisplayName = target.DisplayName, ExecutablePath = target.ExecutablePath,
+                        ProcessName = target.ProcessName, WindowTitleContains = target.WindowTitleContains };
+                    await Task.Run(delegate { apps.Show(apps.OpenAndFindWindow(launchTarget, 10000, token), token); });
                 }
-                catch (Exception ex) { MessageBox.Show(this, ex.Message, "无法打开", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+                catch (OperationCanceledException) { }
+                catch (Exception ex) { if (!IsDisposed) MessageBox.Show(this, ex.Message, "无法打开", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+                finally { _opening = false; if (!IsDisposed) open.Enabled = true; else _lifetime.Dispose(); }
             };
 
             group.Controls.Add(pathBox);
@@ -197,9 +232,17 @@ namespace TangerineRigControl.UI
             return group;
         }
 
+        private void ApplyPath(ApplicationTarget target)
+        {
+            target.ExecutablePath = _paths[target].Text.Trim();
+            if (target == _settings.MotherboardLighting || target == _settings.GpuLighting)
+                target.ProcessName = InstalledAppLocator.WindowProcessName(target.ExecutablePath);
+        }
+
         private void Record(ApplicationTarget target, MacroDefinition macro, Button button, string prefix)
         {
-            target.ExecutablePath = target == _settings.LConnect ? _lianPath.Text.Trim() : _kanaliPath.Text.Trim();
+            if (_opening) return;
+            ApplyPath(target);
             using (var recorder = new MacroRecorderForm(target, macro))
             {
                 if (recorder.ShowDialog(this) == DialogResult.OK)
@@ -226,15 +269,32 @@ namespace TangerineRigControl.UI
         private string BuildSanitizedDiagnostics()
         {
             var builder = new StringBuilder();
-            builder.AppendLine("TangerineRigControl " + typeof(SettingsForm).Assembly.GetName().Version);
+            builder.AppendLine("TangerineRigControl " + System.Diagnostics.FileVersionInfo.GetVersionInfo(Application.ExecutablePath).ProductVersion);
             builder.AppendLine("OS: " + Environment.OSVersion.VersionString);
-            builder.AppendLine("SignalRGB integration: " + (_signalRgb.Checked ? "enabled" : "disabled"));
-            builder.AppendLine("L-Connect detected: " + (File.Exists(_lianPath.Text) ? "yes" : "no"));
-            builder.AppendLine("L-Connect macros: on=" + _settings.LConnect.TurnOn.Steps.Count + ", off=" + _settings.LConnect.TurnOff.Steps.Count);
-            builder.AppendLine("KANALI detected: " + (File.Exists(_kanaliPath.Text) ? "yes" : "no"));
-            builder.AppendLine("KANALI macros: on=" + _settings.Kanali.TurnOn.Steps.Count + ", off=" + _settings.Kanali.TurnOff.Steps.Count);
+            builder.AppendLine("配置来源：" + SettingsStore.LoadSource + "；当前数字来自设置草稿，尚未保存。");
+            builder.AppendLine("Aura SDK selected: " + _useAuraSdk.Checked);
+            var names = new[] { "LConnect", "Kanali", "Motherboard", "Gpu" };
+            var index = 0;
+            foreach (var target in _settings.GetTargets())
+            {
+                var name = names[index++];
+                builder.AppendLine(name + " executable exists: " + (File.Exists(_paths[target].Text) ? "yes" : "no"));
+                builder.AppendLine(name + " macros: on=" + target.TurnOn.Steps.Count + ", off=" + target.TurnOff.Steps.Count);
+            }
             builder.AppendLine("Start with Windows: " + (_startWithWindows.Checked ? "yes" : "no"));
             return builder.ToString();
+        }
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            _lifetime.Cancel();
+            base.OnFormClosing(e);
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            if (!_opening) _lifetime.Dispose();
+            base.OnFormClosed(e);
         }
     }
 }
