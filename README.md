@@ -4,7 +4,7 @@
 
 休息前想关掉机箱里的屏幕和灯光，却要分别打开几套原厂软件？TangerineRigControl 把联力副屏、TRYX 曲面屏、显卡与华硕灯光的常用开关集中到一处。
 
-[下载与运行](#下载与运行) · [首次使用](#第一次使用) · [使用与排错](docs/USAGE.md) · [反馈问题](https://github.com/Manamiiii/TangerineRigControl/issues) · [MIT License](LICENSE)
+[下载与运行](#下载与运行) · [首次使用](#第一次使用) · [使用与排错](docs/USAGE.md) · [反馈问题](https://github.com/Manamiiii/TangerineRigControl/issues) · [GPL v3](LICENSE)
 
 - **少找几个窗口**：主界面、托盘菜单、全局快捷键，都能发起日常开关。
 - **只配置需要的设备**：逐项使用或依次执行全部操作，不必凑齐四类硬件。
@@ -90,6 +90,12 @@
 
 ## License
 
-本项目采用 [MIT License](LICENSE)，允许使用、修改和再分发，包括商业使用；请保留版权与许可证声明。软件按现状提供，完整条款见许可证文件。
+Copyright (c) 2026 Manamiiii。
+
+本项目采用 [GNU General Public License v3.0](LICENSE)，标识为 **GPL-3.0-only**（仅第 3 版）。你可以使用、修改和再分发，包括商业使用；分发受 GPL 覆盖的修改版时，需按 GPL v3 提供相应源码并保留相关声明。软件不提供担保，完整条款见许可证文件。
+
+便携包的 `source/` 目录附带对应项目源码、资源与构建说明。重新分发修改后的程序时，请同时更新对应源码。
+
+历史提交 [`6c2fa4e`](https://github.com/Manamiiii/TangerineRigControl/commit/6c2fa4e15804ca78c18fda8fa45992bca2059c69) 曾按 MIT 发布；本次切换不撤销该历史版本已经授予的 MIT 权利。
 
 厂商软件和 SDK 遵循各自条款，不随本工具分发；本项目与所列厂商无隶属关系。

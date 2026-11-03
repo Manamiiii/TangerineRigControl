@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (c) 2026 Manamiiii
+
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 $assetDirectory = Join-Path $PSScriptRoot '../src/TangerineRigControl/Assets'

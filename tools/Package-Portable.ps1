@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (c) 2026 Manamiiii
+
 [CmdletBinding()]
 param(
     [string]$ExecutablePath = 'src/TangerineRigControl/bin/Release/TangerineRigControl.exe',
@@ -10,14 +13,27 @@ if (-not [IO.Path]::IsPathRooted($ExecutablePath)) { $ExecutablePath = Join-Path
 if (-not [IO.Path]::IsPathRooted($OutputDirectory)) { $OutputDirectory = Join-Path $repositoryRoot $OutputDirectory }
 $ExecutablePath = (Resolve-Path -LiteralPath $ExecutablePath).Path
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
-$version = [Diagnostics.FileVersionInfo]::GetVersionInfo($ExecutablePath).ProductVersion
+$versionInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo($ExecutablePath)
+$version = $versionInfo.ProductVersion
+if ($versionInfo.LegalCopyright -notmatch 'GPL-3.0-only') { throw 'Rebuild the GPL-3.0-only executable before packaging.' }
 if ([string]::IsNullOrWhiteSpace($version) -or $version -notmatch '^[a-zA-Z0-9._-]+$') { throw 'Invalid product version.' }
 if ([IO.Path]::GetFileName($ExecutablePath) -ne 'TangerineRigControl.exe') { throw 'Expected TangerineRigControl.exe.' }
 
 # Explicit allowlist: never copy an entire build directory, local settings or vendor DLLs.
 $documents = @('LICENSE', 'README.md', 'docs/USAGE.md', 'docs/DEVELOPMENT.md', 'docs/NIGHTLY-DEVICE-TEST.md', 'docs/images/main-window.png')
-foreach ($document in $documents) {
-    if (-not (Test-Path -LiteralPath (Join-Path $repositoryRoot $document) -PathType Leaf)) { throw ('Missing package document: ' + $document) }
+$projectPath = 'src/TangerineRigControl/TangerineRigControl.csproj'
+[xml]$project = Get-Content -LiteralPath (Join-Path $repositoryRoot $projectPath) -Raw
+$sourceFiles = $documents + @('TangerineRigControl.sln', $projectPath, 'tools/Package-Portable.ps1', 'tools/Generate-AppIcon.ps1')
+foreach ($item in $project.SelectNodes("//*[local-name()='Compile' or local-name()='EmbeddedResource' or local-name()='None']")) {
+    $sourceFiles += Join-Path ([IO.Path]::GetDirectoryName($projectPath)) $item.Include
+}
+$sourceFiles = @($sourceFiles | Select-Object -Unique)
+foreach ($sourceFile in $sourceFiles) {
+    $fullPath = [IO.Path]::GetFullPath((Join-Path $repositoryRoot $sourceFile))
+    if (-not $fullPath.StartsWith($repositoryRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+        throw ('Source path must stay inside the repository: ' + $sourceFile)
+    }
+    if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) { throw ('Missing package source or document: ' + $sourceFile) }
 }
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 $archive = Join-Path $OutputDirectory ('TangerineRigControl-' + $version + '-windows-portable.zip')
@@ -30,6 +46,11 @@ try {
         $destination = Join-Path $staging $document
         New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($destination)) -Force | Out-Null
         Copy-Item -LiteralPath (Join-Path $repositoryRoot $document) -Destination $destination
+    }
+    foreach ($sourceFile in $sourceFiles) {
+        $destination = Join-Path (Join-Path $staging 'source') $sourceFile
+        New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($destination)) -Force | Out-Null
+        Copy-Item -LiteralPath (Join-Path $repositoryRoot $sourceFile) -Destination $destination
     }
     $revision = 'unknown'
     $workingTree = 'unknown'
@@ -46,7 +67,8 @@ try {
         'Packaged UTC: ' + [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
         'The executable must be built from this checkout and pass --self-test before packaging.'
         'Hardware compatibility has not been certified by this packaging step.'
-        'License: MIT. See LICENSE.'
+        'License: GPL-3.0-only. Copyright (c) 2026 Manamiiii. See LICENSE.'
+        'Corresponding project source and build instructions are included in source/.'
     ) | Set-Content -LiteralPath (Join-Path $staging 'BUILD-INFO.txt') -Encoding UTF8
     $executableHash = (Get-FileHash -LiteralPath (Join-Path $staging 'TangerineRigControl.exe') -Algorithm SHA256).Hash.ToLowerInvariant()
     ($executableHash + '  TangerineRigControl.exe') | Set-Content -LiteralPath (Join-Path $staging 'SHA256SUMS.txt') -Encoding ASCII

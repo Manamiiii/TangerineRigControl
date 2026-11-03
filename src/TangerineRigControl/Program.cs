@@ -1,4 +1,7 @@
-﻿using System;
+﻿// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Manamiiii
+
+using System;
 using System.Threading;
 using System.Windows.Forms;
 using TangerineRigControl.Infrastructure;

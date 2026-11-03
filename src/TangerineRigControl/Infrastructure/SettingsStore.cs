@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Manamiiii
+
 using System;
 using System.IO;
 using System.Xml.Serialization;

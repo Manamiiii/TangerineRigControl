@@ -9,13 +9,15 @@
 把两者解压到同一目录，在 PowerShell 执行（将文件名替换为实际下载版本）：
 
 ```powershell
-Get-FileHash .\TangerineRigControl-0.3.1-preview-windows-portable.zip -Algorithm SHA256
-Get-Content .\TangerineRigControl-0.3.1-preview-windows-portable.zip.sha256
+Get-FileHash .\TangerineRigControl-0.3.2-preview-windows-portable.zip -Algorithm SHA256
+Get-Content .\TangerineRigControl-0.3.2-preview-windows-portable.zip.sha256
 ```
 
 两处哈希应一致。它用于核对下载完整性，不是代码签名或安全保证。旧产物可能没有校验文件，不应伪造一个校验值来“验证”它。
 
 解压内层 ZIP 后，`BUILD-INFO.txt` 提供版本和源码标识，`SHA256SUMS.txt` 提供 EXE 的哈希。本地尚未提交的构建会标明工作树有修改，不能作为干净提交的发布证明。
+
+GPL v3 便携包包含 `LICENSE` 和 `source/` 源码目录。普通使用直接运行根目录 EXE 即可；希望修改或重新构建的用户可阅读 `source/docs/DEVELOPMENT.md`。
 
 ## 先完成一个设备
 
