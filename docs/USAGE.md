@@ -9,8 +9,8 @@
 把两者解压到同一目录，在 PowerShell 执行（将文件名替换为实际下载版本）：
 
 ```powershell
-Get-FileHash .\TangerineRigControl-0.3.2-preview-windows-portable.zip -Algorithm SHA256
-Get-Content .\TangerineRigControl-0.3.2-preview-windows-portable.zip.sha256
+Get-FileHash .\TangerineRigControl-0.3.3-preview-windows-portable.zip -Algorithm SHA256
+Get-Content .\TangerineRigControl-0.3.3-preview-windows-portable.zip.sha256
 ```
 
 两处哈希应一致。它用于核对下载完整性，不是代码签名或安全保证。旧产物可能没有校验文件，不应伪造一个校验值来“验证”它。
@@ -96,6 +96,8 @@ iGC.Lite 可选择 `iGCBootstrapper.exe` 入口，程序会匹配实际的 iGC.L
 ## 更新、备份与卸载
 
 配置目录：在资源管理器地址栏输入 `%LOCALAPPDATA%\TangerineRigControl`。
+
+安装路径、录制坐标及偏好仅作为本机配置保存，不随源码或便携包分发，也不会由本工具上传。配置和备份是未加密的 XML，受本机 Windows 文件访问权限保护；请不要公开分享它们。启用登录启动时，程序路径还会写入当前用户的 Windows 启动项。
 
 - **备份**：从托盘退出后复制整个目录到自己选择的位置。正常保存只保留上一份 `.bak`，它不是长期版本历史；关键录制建议单独备份。
 - **自动恢复**：主文件损坏时尝试有效 `.bak`。恢复后保存会另存故障原文件，保留好备份。两者都不可读时禁止保存，不表示录制已删除。

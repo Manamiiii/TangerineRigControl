@@ -15,6 +15,15 @@ settings.xml.*
 *.local.xml
 *.log
 captures/
+private/
+.env
+.env.*
+!.env.example
+*.pdb
+*.dmp
+*.pfx
+*.p12
+*.key
 
 # OS files
 Thumbs.db

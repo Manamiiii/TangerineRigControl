@@ -48,6 +48,10 @@ if ($LASTEXITCODE -ne 0) { throw 'Packaging failed' }
 
 ## 修改与发布边界
 
+提交前运行 `powershell -NoProfile -ExecutionPolicy Bypass -File tools\Check-PublicContent.ps1`，检查 Git 跟踪文件是否混入绝对路径、本地配置、调试文件或常见密钥格式。新增文件应先暂存，让检查覆盖它们。CI 检查跟踪文件，打包检查实际纳入包中的源码、文档和 EXE；命中时只输出文件名和规则，不输出敏感值。它不是全面的秘密扫描，截图内容和任意命名的个人信息仍需人工复核。
+
+Release 使用 `DebugType=none`，避免 EXE 内嵌构建机的 PDB 路径；Debug 构建只供本地开发。打包还会检查 EXE 中的绝对路径，不要用 Debug 程序替代发布版。真实配置与备份留在 LocalAppData；临时日志、截图和导出可放在被忽略的 `private/` 或 `artifacts/`，不要强制添加到 Git。
+
 - `UI`：主界面、设置草稿与等待编辑；`Automation`：F8 录制及坐标回放。
 - `Infrastructure`：窗口、权限、配置与自检；`Services`：Aura COM 及后台会话。
 - 修改后运行自检；涉及录制或 SDK 时，保留旧配置兼容性并说明设备验证范围。

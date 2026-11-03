@@ -23,7 +23,7 @@ if ([IO.Path]::GetFileName($ExecutablePath) -ne 'TangerineRigControl.exe') { thr
 $documents = @('LICENSE', 'README.md', 'docs/USAGE.md', 'docs/DEVELOPMENT.md', 'docs/NIGHTLY-DEVICE-TEST.md', 'docs/images/main-window.png')
 $projectPath = 'src/TangerineRigControl/TangerineRigControl.csproj'
 [xml]$project = Get-Content -LiteralPath (Join-Path $repositoryRoot $projectPath) -Raw
-$sourceFiles = $documents + @('TangerineRigControl.sln', $projectPath, 'tools/Package-Portable.ps1', 'tools/Generate-AppIcon.ps1')
+$sourceFiles = $documents + @('TangerineRigControl.sln', $projectPath, 'tools/Package-Portable.ps1', 'tools/Check-PublicContent.ps1', 'tools/Generate-AppIcon.ps1')
 foreach ($item in $project.SelectNodes("//*[local-name()='Compile' or local-name()='EmbeddedResource' or local-name()='None']")) {
     $sourceFiles += Join-Path ([IO.Path]::GetDirectoryName($projectPath)) $item.Include
 }
@@ -35,6 +35,7 @@ foreach ($sourceFile in $sourceFiles) {
     }
     if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) { throw ('Missing package source or document: ' + $sourceFile) }
 }
+& (Join-Path $PSScriptRoot 'Check-PublicContent.ps1') -RepositoryRoot $repositoryRoot -Files $sourceFiles -ExecutablePath $ExecutablePath
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 $archive = Join-Path $OutputDirectory ('TangerineRigControl-' + $version + '-windows-portable.zip')
 if ((Test-Path -LiteralPath $archive) -or (Test-Path -LiteralPath ($archive + '.sha256'))) { throw 'Package already exists; choose another output directory.' }
