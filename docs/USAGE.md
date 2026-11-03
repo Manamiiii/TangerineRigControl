@@ -9,8 +9,8 @@
 把两者解压到同一目录，在 PowerShell 执行（将文件名替换为实际下载版本）：
 
 ```powershell
-Get-FileHash .\TangerineRigControl-0.4.0-preview-windows-x64-Setup.exe -Algorithm SHA256
-Get-Content .\TangerineRigControl-0.4.0-preview-windows-x64-Setup.exe.sha256
+Get-FileHash .\TangerineRigControl-0.4.1-preview-windows-x64-Setup.exe -Algorithm SHA256
+Get-Content .\TangerineRigControl-0.4.1-preview-windows-x64-Setup.exe.sha256
 ```
 
 两处哈希应一致。它用于核对下载完整性，不是代码签名或安全保证。旧产物可能没有校验文件，不应伪造一个校验值来“验证”它。

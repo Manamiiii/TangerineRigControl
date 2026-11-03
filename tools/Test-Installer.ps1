@@ -21,6 +21,14 @@ if ((Test-Path -LiteralPath $install) -or (Test-Path -LiteralPath $data) -or (Te
     ($null -ne (Get-ItemProperty -LiteralPath $run -Name $name -ErrorAction SilentlyContinue))) {
     throw 'Fixture identity already exists. Preserve it and inspect the previous test before rerunning.'
 }
+$existingMutex = $null
+if ([Threading.Mutex]::TryOpenExisting(('Local\' + $name + '.SingleInstance'), [ref]$existingMutex)) {
+    $existingMutex.Dispose()
+    throw 'Fixture application/installer is already running; no process was stopped.'
+}
+if (@(Get-Process TangerineRigControl -ErrorAction SilentlyContinue).Count -gt 0) {
+    throw 'An application process exists. Preserve it; run fixtures on an isolated runner instead.'
+}
 $script:process = $null
 $checks = 0
 function Assert-Test([bool]$condition, [string]$label) {
@@ -35,7 +43,7 @@ function Run-Setup([string]$path, [string[]]$arguments, [int]$expected) {
     Assert-Test ($p.ExitCode -eq $expected) ('installer exit code ' + $expected)
 }
 function Start-Fixture([string]$mode) {
-    foreach ($file in @('ready', 'stop')) { $path = Join-Path $data $file; if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path } }
+    foreach ($file in @('ready', 'stop', 'tray-close-passed')) { $path = Join-Path $data $file; if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path } }
     $script:process = Start-Process -FilePath (Join-Path $install 'TangerineRigControl.exe') -ArgumentList $mode -WindowStyle Hidden -PassThru
     $deadline = [DateTime]::UtcNow.AddSeconds(30)
     while (-not (Test-Path -LiteralPath (Join-Path $data 'ready')) -and [DateTime]::UtcNow -lt $deadline -and -not $script:process.HasExited) {
@@ -49,6 +57,7 @@ function Stop-Fixture {
         if (-not $script:process.WaitForExit(15000)) { throw 'Fixture did not exit gracefully; no process was terminated.' }
         $script:process.WaitForExit()
         Assert-Test ($script:process.ExitCode -eq 0) 'application exits gracefully'
+        Assert-Test (Test-Path -LiteralPath (Join-Path $data 'tray-close-passed')) 'window close hides to tray; tray exit releases the application'
     }
     $script:process = $null
 }
@@ -57,6 +66,7 @@ try {
     Assert-Test ((Test-Path -LiteralPath $shortcut) -and (Test-Path -LiteralPath (Join-Path $install 'Uninstall.exe'))) 'Start menu and uninstaller installed'
     Assert-Test ((Get-ItemProperty -LiteralPath $key).InstallLocation -eq $install) 'per-user uninstall registration'
     Assert-Test ((Get-ItemProperty -LiteralPath $key).DisplayVersion -eq [Diagnostics.FileVersionInfo]::GetVersionInfo($OldSetup).FileVersion) 'old fixture version registered'
+    Run-Setup (Join-Path $install 'TangerineRigControl.exe') @('--fixture-startup-test') 0
     $legacy = New-Object Threading.Mutex($false, ('Local\' + $name + '.SingleInstance'))
     try { Run-Setup $NewSetup @('/S') 20 } finally { $legacy.Dispose() }
     $lease = [IO.File]::Open((Join-Path $data '.lifecycle.lock'), 'OpenOrCreate', 'ReadWrite', 'None')

@@ -42,6 +42,7 @@ jobs:
         shell: pwsh
         run: ./tools/Package-Windows.ps1 -MakensisPath artifacts/nsis/makensis.exe
       - name: Build isolated installer fixtures
+        # Separate identities; the production test runs only on the disposable hosted runner.
         shell: pwsh
         run: |
           msbuild TangerineRigControl.sln /t:Rebuild /p:Configuration=Release /p:DefineConstants=INSTALLER_TEST "/p:OutputPath=$pwd/artifacts/fixture/build/" "/p:IntermediateOutputPath=$pwd/artifacts/fixture/obj/" /m
@@ -55,3 +56,7 @@ jobs:
       - name: Report hashes (binaries are not published)
         shell: pwsh
         run: Get-Content artifacts/windows/*.sha256
+      - name: Verify production identity on disposable runner
+        shell: pwsh
+        run: |
+          ./tools/Test-ProductionInstaller.ps1 -Setup (Get-ChildItem artifacts/windows/*Setup.exe).FullName -ExecutablePath src/TangerineRigControl/bin/Release/TangerineRigControl.exe

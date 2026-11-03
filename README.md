@@ -31,7 +31,7 @@
 
 运行要求：Windows 10/11 **x64**、**.NET Framework 4.8 或 4.8.1**，以及所需设备的原厂软件。先确认原厂软件能手动开关设备。缺少运行环境时参阅 [Microsoft 安装说明](https://learn.microsoft.com/en-us/dotnet/framework/install/)。普通用户不需要源码、Node、npm、Python 或 Rust。macOS、Linux、Windows ARM64 尚未支持或验证。
 
-**0.4.0 预览版已加入 Setup 构建，但尚未公开发布安装包或创建 Release。** 当前 CI 只验证，不上传安装产物；可以按 [开发说明](docs/DEVELOPMENT.md) 自行构建。历史 [0.3.3 便携包构建](https://github.com/Manamiiii/TangerineRigControl/actions/runs/41575988118) 的 Artifacts 可能仍可下载，需要登录 GitHub且产物未过期；它不是新版 Setup。
+**0.4.1 预览版已加入 Setup 构建，但尚未公开发布安装包或创建 Release。** 当前 CI 只验证，不上传安装产物；可以按 [开发说明](docs/DEVELOPMENT.md) 自行构建。历史 [0.3.3 便携包构建](https://github.com/Manamiiii/TangerineRigControl/actions/runs/41575988118) 的 Artifacts 可能仍可下载，需要登录 GitHub且产物未过期；它不是新版 Setup。
 
 获得对应版本的包后：
 

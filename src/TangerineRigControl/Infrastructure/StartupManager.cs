@@ -22,7 +22,7 @@ namespace TangerineRigControl.Infrastructure
                     var command = "\"" + Application.ExecutablePath + "\" --startup";
                     if (!string.Equals(key.GetValue(ValueName) as string, command, StringComparison.Ordinal)) key.SetValue(ValueName, command);
                 }
-                else
+                else if (IsCurrentCommand(key.GetValue(ValueName) as string, Application.ExecutablePath))
                 {
                     key.DeleteValue(ValueName, false);
                 }
