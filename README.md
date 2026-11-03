@@ -1,16 +1,16 @@
 # TangerineRigControl
 
-**一个 Windows 托盘工具，集中开关主机灯光和机箱屏幕。**
+**在 Windows 托盘里，集中开关主机灯光和机箱屏幕。**
 
-休息前想关掉机箱里的屏幕和灯光，却要分别打开几套原厂软件？TangerineRigControl 把联力副屏、TRYX 曲面屏、显卡与华硕灯光的常用开关集中到一处。
+休息前想关掉机箱里的屏幕和灯光，却要分别打开几套原厂软件？TangerineRigControl 将 **L-Connect 3、TRYX KANALI、iGC.Lite 和华硕 Aura** 的常用开关集中到一处。完成配置后，可以单独操作设备，也可以从托盘或快捷键依次执行全部开关。
 
-[下载与运行](#下载与运行) · [首次使用](#第一次使用) · [使用与排错](docs/USAGE.md) · [反馈问题](https://github.com/Manamiiii/TangerineRigControl/issues) · [GPL v3](LICENSE)
+[下载预览版](#下载与运行) · [适配范围](#适合哪些设备) · [首次使用](#第一次使用) · [使用与排错](docs/USAGE.md) · [反馈问题](https://github.com/Manamiiii/TangerineRigControl/issues/new/choose)
 
 - **少找几个窗口**：主界面、托盘菜单、全局快捷键，都能发起日常开关。
 - **只配置需要的设备**：逐项使用或依次执行全部操作，不必凑齐四类硬件。
-- **配置留在本机**：无需账户，无遥测；录制支持等待调整、草稿取消和配置备份。
+- **本地使用，免安装**：解压后运行，无需应用账户，无遥测；配置保存在本机。源码以 [GPL v3](LICENSE) 分享。
 
-> **预览版 · 中文界面 · Windows 10/11**。适合已经安装原厂软件、愿意做一次录制和校准的用户。具体设备与软件版本需要实测。
+> **预览版 · 中文界面 · Windows 10/11**。适合已经使用上述原厂软件、愿意录制和校准开关步骤的用户。它不会自动识别所有硬件；原厂软件更新或布局改变后，可能需要重新校准。具体设备与软件版本需要实测。
 
 <img src="docs/images/main-window.png" alt="TangerineRigControl 主界面：四组设备开关、设置与录制、停止操作及首次配置提示" width="680">
 
@@ -31,28 +31,28 @@
 
 运行要求：Windows 10/11、**.NET Framework 4.8 或 4.8.1**，以及所需设备的原厂软件。先确认原厂软件能手动开关设备。缺少运行环境时参阅 [Microsoft 安装说明](https://learn.microsoft.com/en-us/dotnet/framework/install/)。普通用户不需要安装开发工具。
 
-1. 查看 [Releases](https://github.com/Manamiiii/TangerineRigControl/releases) 是否有发布包。若尚无发布包，可按下面的方法获取 Actions 构建，或按 [开发说明](docs/DEVELOPMENT.md) 自行构建。
-2. 解压到一个固定目录，运行 `TangerineRigControl.exe`。如果外层压缩包内还有带版本号的 ZIP，请继续解压它；旧构建可能只有 EXE。GitHub 的 “Source code” ZIP 是源码，不是可运行程序。
-3. 进入“设置与录制”，从一个设备开始配置。遇到权限提示时再按 [排错指南](docs/USAGE.md#出现问题时) 处理。
+**目前通过 GitHub Actions 提供预览包，尚无 Release 发布包。** 下载 Actions 产物需要登录 GitHub，运行本工具不需要账户。
 
-<details>
-<summary>如何下载 Actions 构建</summary>
+1. 打开 [Actions → build](https://github.com/Manamiiii/TangerineRigControl/actions/workflows/build.yml?query=branch%3Amain)，选择 **main 分支最近一次成功运行**。
+2. 在该次运行页面底部的 **Artifacts** 中下载 `TangerineRigControl-windows-portable`。
+3. 解压下载的外层 ZIP，再解压其中的 `TangerineRigControl-<版本>-windows-portable.zip` 到固定目录。运行里面的 **`TangerineRigControl.exe`**。
+4. 进入“设置与录制”，按下面的步骤先完成一个设备。
 
-登录 GitHub，进入 [Actions → build](https://github.com/Manamiiii/TangerineRigControl/actions/workflows/build.yml)，选择 **main 分支最近一次成功运行**，在页面的 Artifacts 区域下载 `TangerineRigControl-windows-portable`。产物可能过期；没有可下载产物时请自行构建。参阅 [GitHub 下载说明](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts?tool=webui)。
+找不到下载入口？确认已登录 GitHub、运行成功且产物未过期，参阅 [GitHub 下载说明](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts?tool=webui)。也可以按 [开发说明](docs/DEVELOPMENT.md) 自行构建。仓库的 **Code → Download ZIP 是源码，不是可运行程序**；后续发布包会放在 [Releases](https://github.com/Manamiiii/TangerineRigControl/releases)。
 
-带版本号的便携包附有 `.sha256` 校验值，方法见 [下载校验](docs/USAGE.md#下载校验)。构建可能尚未经过设备验收，请按对应提交和包内说明判断功能范围。
-
-</details>
+便携包附带对应源码及 `.sha256` 校验文件，核对方法见 [下载校验](docs/USAGE.md#下载校验)。自动构建通过仅验证构建与自检，不代表已在你的硬件上验收。
 
 程序当前未做代码签名。遇到 Windows 来源提示时先核对来源，不要关闭系统安全保护。
 
 ## 第一次使用
 
-1. 打开 **设置与录制**，只选择你需要的设备标签页。用“浏览…”选择原厂 `.exe`，用“打开原厂软件”确认入口正确。
-2. 新配置默认勾选华硕 Aura SDK，但这不代表已经连接设备。没有对应设备或暂不想使用时，取消 SDK 选项，保留该组空白即可。
-3. 对录制控制的设备，先选“录制开启”。在原厂软件回到固定起始页面，鼠标停在要点击的位置，按 **F8 记录坐标**，再手动点击。逐步重复，最后点击“保存序列”。关闭序列也单独录制。
-4. 每步默认等待 **900 毫秒**，手动等待时长不会被记录。页面较慢时，点击对应序列旁的“等待…”调整前一步等待；“首次点击前等待”默认 1200 毫秒。
-5. 点击设置页 **保存**。单项验证关闭、开启、重复关闭和重复开启，确认后再用“全部”操作。完整步骤见 [使用与排错指南](docs/USAGE.md) 和 [设备验收清单](docs/NIGHTLY-DEVICE-TEST.md)。
+先让一个设备完成“关闭 → 开启”，再配置其他设备：
+
+1. **选设备**：打开“设置与录制”，用“浏览…”选择对应原厂 `.exe`，再用“打开原厂软件”核对入口。不使用华硕 Aura 时，取消默认勾选的 SDK 选项；其余不用的项目保持空白。
+2. **录制两个方向**：选择“录制开启”，在原厂软件的固定起始页面，把鼠标移到目标，按 **F8 记录坐标，再手动点击**。重复直到完成，点“保存序列”。单独录制关闭步骤。Aura SDK 模式不需要录制，使用前先看 [SDK 行为](docs/USAGE.md#aura-sdk-的特殊行为)。
+3. **保存并验证**：还要点击设置页的 **保存**，再单项测试关闭、开启、重复关闭和重复开启。页面加载慢时，用序列旁的“等待…”调整；手动录制时的等待时长不会自动保存。
+
+详细录制方法见 [录制、保存与调整等待](docs/USAGE.md#录制保存与调整等待)。确认各项表现正确后，再使用“全部”操作或启用登录启动。
 
 **执行前保持相同的起始页面、布局和窗口大小，执行期间不要移动鼠标或切换窗口。** 坐标回放每步都会点击，不识别按钮状态；如果原厂控件只是“切换”，重复开启可能反而关闭，必须实测自己的序列。
 
@@ -84,7 +84,7 @@
 
 ## 参与改进
 
-欢迎反馈自己的设备型号、原厂软件版本以及单次和重复操作的实际表现。具体复现步骤比“不能用”更有帮助；请先查看 [排错指南](docs/USAGE.md#出现问题时)。
+欢迎通过 [设备兼容性反馈](https://github.com/Manamiiii/TangerineRigControl/issues/new?template=compatibility_report.md) 分享设备型号、原厂软件版本以及单次和重复操作的实际表现，成功和失败的结果都有帮助。可按 [设备验收清单](docs/NIGHTLY-DEVICE-TEST.md) 检查；遇到错误先看 [排错指南](docs/USAGE.md#出现问题时)。
 
 开发者可阅读 [构建、自检与打包说明](docs/DEVELOPMENT.md)。项目采用 C# 5、WinForms 和 .NET Framework 4.8，保持本地、轻量的架构。
 
