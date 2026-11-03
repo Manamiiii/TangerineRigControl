@@ -4,13 +4,13 @@
 
 休息前想关掉机箱里的屏幕和灯光，却要分别打开几套原厂软件？TangerineRigControl 将 **L-Connect 3、TRYX KANALI、iGC.Lite 和华硕 Aura** 的常用开关集中到一处。完成配置后，可以单独操作设备，也可以从托盘或快捷键依次执行全部开关。
 
-[下载预览版](#下载与运行) · [适配范围](#适合哪些设备) · [首次使用](#第一次使用) · [使用与排错](docs/USAGE.md) · [反馈问题](https://github.com/Manamiiii/TangerineRigControl/issues/new/choose)
+[安装与下载](#下载与运行) · [适配范围](#适合哪些设备) · [首次使用](#第一次使用) · [使用与排错](docs/USAGE.md) · [反馈问题](https://github.com/Manamiiii/TangerineRigControl/issues/new/choose)
 
 - **少找几个窗口**：主界面、托盘菜单、全局快捷键，都能发起日常开关。
 - **只配置需要的设备**：逐项使用或依次执行全部操作，不必凑齐四类硬件。
-- **本地使用，免安装**：解压后运行，无需应用账户，无遥测；配置保存在本机。源码以 [GPL v3](LICENSE) 分享。
+- **本地使用**：支持当前用户安装及便携运行，无需应用账户，无遥测；配置保存在本机。源码以 [GPL v3](LICENSE) 分享。
 
-> **预览版 · 中文界面 · Windows 10/11**。适合已经使用上述原厂软件、愿意录制和校准开关步骤的用户。它不会自动识别所有硬件；原厂软件更新或布局改变后，可能需要重新校准。具体设备与软件版本需要实测。
+> **预览版 · 中文界面 · Windows 10/11 x64**。适合已经使用上述原厂软件、愿意录制和校准开关步骤的用户。它不会自动识别所有硬件；原厂软件更新或布局改变后，可能需要重新校准。具体设备与软件版本需要实测。
 
 <img src="docs/images/main-window.png" alt="TangerineRigControl 主界面：四组设备开关、设置与录制、停止操作及首次配置提示" width="680">
 
@@ -29,18 +29,20 @@
 
 ## 下载与运行
 
-运行要求：Windows 10/11、**.NET Framework 4.8 或 4.8.1**，以及所需设备的原厂软件。先确认原厂软件能手动开关设备。缺少运行环境时参阅 [Microsoft 安装说明](https://learn.microsoft.com/en-us/dotnet/framework/install/)。普通用户不需要安装开发工具。
+运行要求：Windows 10/11 **x64**、**.NET Framework 4.8 或 4.8.1**，以及所需设备的原厂软件。先确认原厂软件能手动开关设备。缺少运行环境时参阅 [Microsoft 安装说明](https://learn.microsoft.com/en-us/dotnet/framework/install/)。普通用户不需要源码、Node、npm、Python 或 Rust。macOS、Linux、Windows ARM64 尚未支持或验证。
 
-**目前通过 GitHub Actions 提供预览包，尚无 Release 发布包。** 下载 Actions 产物需要登录 GitHub，运行本工具不需要账户。
+**0.4.0 预览版已加入 Setup 构建，但尚未公开发布安装包或创建 Release。** 当前 CI 只验证，不上传安装产物；可以按 [开发说明](docs/DEVELOPMENT.md) 自行构建。历史 [0.3.3 便携包构建](https://github.com/Manamiiii/TangerineRigControl/actions/runs/41575988118) 的 Artifacts 可能仍可下载，需要登录 GitHub且产物未过期；它不是新版 Setup。
 
-1. 打开 [Actions → build](https://github.com/Manamiiii/TangerineRigControl/actions/workflows/build.yml?query=branch%3Amain)，选择 **main 分支最近一次成功运行**。
-2. 在该次运行页面底部的 **Artifacts** 中下载 `TangerineRigControl-windows-portable`。
-3. 解压下载的外层 ZIP，再解压其中的 `TangerineRigControl-<版本>-windows-portable.zip` 到固定目录。运行里面的 **`TangerineRigControl.exe`**。
-4. 进入“设置与录制”，按下面的步骤先完成一个设备。
+获得对应版本的包后：
 
-找不到下载入口？确认已登录 GitHub、运行成功且产物未过期，参阅 [GitHub 下载说明](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts?tool=webui)。也可以按 [开发说明](docs/DEVELOPMENT.md) 自行构建。仓库的 **Code → Download ZIP 是源码，不是可运行程序**；后续发布包会放在 [Releases](https://github.com/Manamiiii/TangerineRigControl/releases)。
+| 方式 | 使用步骤 |
+| --- | --- |
+| Setup（推荐日常使用） | 核对 `.sha256`，运行 `TangerineRigControl-<版本>-windows-x64-Setup.exe`，按向导安装，再从开始菜单打开。默认仅安装给当前用户，不请求管理员权限。 |
+| Portable（免安装） | 核对 `.sha256`，解压 `TangerineRigControl-<版本>-windows-portable.zip`，运行其中的 `TangerineRigControl.exe`。 |
 
-便携包附带对应源码及 `.sha256` 校验文件，核对方法见 [下载校验](docs/USAGE.md#下载校验)。自动构建通过仅验证构建与自检，不代表已在你的硬件上验收。
+两种方式都保留本机配置；安装版支持 Windows 卸载入口，卸载默认保留配置，更新需退出程序后手动运行新版安装器。完整说明见 [Windows 安装版](docs/INSTALLER.md) 和 [下载校验](docs/USAGE.md#下载校验)。程序运行中，安装或卸载会拒绝继续，不强制结束进程。
+
+仓库的 **Code → Download ZIP 是源码，不是可运行程序**。未来公开发布的包会放在 [Releases](https://github.com/Manamiiii/TangerineRigControl/releases)，随包附带对应源码、许可证和校验值。自动构建通过不代表已在你的硬件上验收。
 
 程序当前未做代码签名。遇到 Windows 来源提示时先核对来源，不要关闭系统安全保护。
 
@@ -80,7 +82,7 @@
 
 仓库不预置作者的安装目录或录制坐标。程序路径在使用者的电脑上发现或选择，录制步骤由使用者配置，均作为本机配置保存，不会自动上传。便携包不包含这些私人配置；启用登录启动时，程序位置只写入当前用户的 Windows 启动项。
 
-更新前从托盘退出，备份配置目录，再替换程序；保留原安装位置可避免登录启动路径失效。卸载、备份恢复和详细隐私说明见 [使用指南](docs/USAGE.md#更新备份与卸载)。不要用他人的配置覆盖本机配置，路径与坐标无法通用。
+更新前从托盘退出，备份配置目录；安装版运行新版 Setup，便携版替换原目录中的程序。卸载、备份恢复和详细隐私说明见 [使用指南](docs/USAGE.md#更新备份与卸载)。不要用他人的配置覆盖本机配置，路径与坐标无法通用。
 
 反馈问题请使用 [Issues](https://github.com/Manamiiii/TangerineRigControl/issues)，附上错误文字、复现步骤、原厂软件版本及“设置与录制 → 复制脱敏诊断”。不要上传完整配置或未经检查的截图、原厂日志。
 

@@ -11,7 +11,7 @@ permissions:
 jobs:
   windows:
     runs-on: windows-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
       - name: Check public content
@@ -30,14 +30,28 @@ jobs:
           Get-Content self-test.out,self-test.err
           Write-Output "Self-test exit code: $($process.ExitCode)"
           if ($process.ExitCode -ne 0) { exit $process.ExitCode }
-      - name: Package portable preview
+      - name: Fetch pinned portable NSIS
         shell: pwsh
-        run: ./tools/Package-Portable.ps1
-      - name: Upload portable package
-        uses: actions/upload-artifact@v7
-        with:
-          name: TangerineRigControl-windows-portable
-          path: |
-            artifacts/packages/*.zip
-            artifacts/packages/*.sha256
-          if-no-files-found: error
+        run: |
+          New-Item -ItemType Directory artifacts/nsis -Force | Out-Null
+          Invoke-WebRequest 'https://github.com/electron-userland/electron-builder-binaries/releases/download/nsis-3.0.4.1/nsis-3.0.4.1.7z' -OutFile artifacts/nsis.7z
+          if ((Get-FileHash artifacts/nsis.7z -Algorithm SHA256).Hash -ne '9877df902530f96357d13a7a31ae2b9df67f48b11ffc9a1700a7c961574ec5fa') { throw 'NSIS archive checksum mismatch' }
+          7z x artifacts/nsis.7z -oartifacts/nsis -y -bd
+          if ($LASTEXITCODE -ne 0) { throw 'NSIS extraction failed' }
+      - name: Build Windows Setup and Portable (no upload)
+        shell: pwsh
+        run: ./tools/Package-Windows.ps1 -MakensisPath artifacts/nsis/makensis.exe
+      - name: Build isolated installer fixtures
+        shell: pwsh
+        run: |
+          msbuild TangerineRigControl.sln /t:Rebuild /p:Configuration=Release /p:DefineConstants=INSTALLER_TEST "/p:OutputPath=$pwd/artifacts/fixture/build/" "/p:IntermediateOutputPath=$pwd/artifacts/fixture/obj/" /m
+          if ($LASTEXITCODE -ne 0) { throw 'Fixture build failed' }
+          ./tools/Package-Windows.ps1 -Fixture -FixtureVersion 0.3.9.0 -ExecutablePath artifacts/fixture/build/TangerineRigControl.exe -OutputDirectory artifacts/fixture/old -MakensisPath artifacts/nsis/makensis.exe
+          ./tools/Package-Windows.ps1 -Fixture -ExecutablePath artifacts/fixture/build/TangerineRigControl.exe -OutputDirectory artifacts/fixture/new -MakensisPath artifacts/nsis/makensis.exe
+      - name: Verify isolated installer lifecycle
+        shell: pwsh
+        run: |
+          ./tools/Test-Installer.ps1 -OldSetup (Get-ChildItem artifacts/fixture/old/*Setup.exe).FullName -NewSetup (Get-ChildItem artifacts/fixture/new/*Setup.exe).FullName
+      - name: Report hashes (binaries are not published)
+        shell: pwsh
+        run: Get-Content artifacts/windows/*.sha256

@@ -10,9 +10,7 @@ namespace TangerineRigControl.Infrastructure
 {
     internal static class SettingsStore
     {
-        private static readonly string SettingsDirectory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "TangerineRigControl");
+        private static readonly string SettingsDirectory = AppIdentity.DataDirectory;
 
         internal static readonly string SettingsPath = Path.Combine(SettingsDirectory, "settings.xml");
 
@@ -66,7 +64,9 @@ namespace TangerineRigControl.Infrastructure
         {
             var settings = FileStore.Load();
             LoadWarning = FileStore.Warning;
+#if !INSTALLER_TEST
             foreach (var target in settings.GetTargets()) DiscoverPath(target);
+#endif
             return settings;
         }
 

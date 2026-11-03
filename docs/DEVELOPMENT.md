@@ -4,7 +4,7 @@
 
 ## 构建环境
 
-- Windows 10/11。
+- Windows 10/11 x64。
 - Visual Studio 2022 Build Tools 的“.NET 桌面生成工具”。
 - .NET Framework 4.8 Developer Pack（运行环境不能替代编译用的引用程序集）。
 
@@ -24,6 +24,8 @@ if ($p.ExitCode -ne 0) { throw "Self-test failed: $($p.ExitCode)" }
 ```
 
 输出位于 `src\TangerineRigControl\bin\Release`。退出码 0 表示自检通过。自检只使用临时配置、合成控件、本机测试管道及 SDK 替身，不启动原厂软件、不发送设备点击、不修改登录启动项。
+
+项目默认编译 x64。Windows Setup 构建方式、固定 NSIS 版本及隔离安装测试见 [安装版说明](INSTALLER.md)；`tools/Package-Windows.ps1` 同时生成 Setup 和 Portable，不需要分别重复打包。
 
 自检覆盖配置恢复、旧配置迁移、等待编辑、窗口保护、界面布局和 SDK 超时等边界，不能证明真实灯效或全部软件版本兼容。设备验证见 [验收清单](NIGHTLY-DEVICE-TEST.md)。
 
@@ -57,4 +59,4 @@ Release 使用 `DebugType=none`，避免 EXE 内嵌构建机的 PDB 路径；Deb
 - 修改后运行自检；涉及录制或 SDK 时，保留旧配置兼容性并说明设备验证范围。
 - 功能图请使用合成配置，说明截图状态；不要提交本机路径、坐标、日志或真实用户截图。
 
-CI 在推送或 PR 时构建、自检并上传便携包，不创建 Release。正式分发前核对版本、LICENSE、包内说明和校验值，并记录设备/原厂软件版本的实测结果。不要把历史验证或 SDK 调用成功当作当前版本硬件效果已确认。
+CI 在推送或 PR 时构建、自检、打包并运行隔离身份安装生命周期测试；不上传公开安装包，不创建 Release。正式分发前核对版本、LICENSE、第三方声明、包内说明和校验值，并记录设备/原厂软件版本的实测结果。不要把历史验证或 SDK 调用成功当作当前版本硬件效果已确认。

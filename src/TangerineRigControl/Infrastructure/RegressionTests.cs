@@ -19,6 +19,7 @@ namespace TangerineRigControl.Infrastructure
         internal static void Run()
         {
             Case("settings: round trip, zero delay, draft isolation", RoundTrip);
+            Case("installer: lifecycle lock excludes another process and can reopen", LifecycleLock);
             Case("settings: legacy backend migration", Legacy);
             Case("settings: recovery preserves good backup and damaged bytes", Recovery);
             Case("settings: unreadable files cannot be overwritten", Blocked);
@@ -33,6 +34,22 @@ namespace TangerineRigControl.Infrastructure
             Case("aura: release does not create a session; one thread owns backend", AuraOwnership);
             Case("aura: timeout quarantines session and close is bounded", AuraTimeout);
             Case("aura: cancellation and release failure are reported", AuraFailures);
+        }
+
+        private static void LifecycleLock()
+        {
+            WithFile(path =>
+            {
+                var directory = Path.GetDirectoryName(path);
+                using (AppIdentity.AcquireLifecycleLock(directory))
+                {
+                    bool blocked = false;
+                    try { using (AppIdentity.AcquireLifecycleLock(directory)) { } }
+                    catch (IOException) { blocked = true; }
+                    Check(blocked);
+                }
+                using (AppIdentity.AcquireLifecycleLock(directory)) { }
+            });
         }
 
         private static void Case(string name, Action test)

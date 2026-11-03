@@ -4,13 +4,13 @@
 
 ## 下载校验
 
-从仓库的 main 分支成功构建下载；GitHub Actions 会把构建产物包装为外层 ZIP。本轮打包流程生成的内层文件为 `TangerineRigControl-<版本>-windows-portable.zip` 及同名 `.sha256`。
+新版 Setup 尚未公开发布，下载状态见 [README](../README.md#下载与运行)。构建会生成 `TangerineRigControl-<版本>-windows-x64-Setup.exe`、Portable ZIP 以及各自同名 `.sha256`。历史 Actions 便携产物可能还有一层外层 ZIP，需先解压。
 
 把两者解压到同一目录，在 PowerShell 执行（将文件名替换为实际下载版本）：
 
 ```powershell
-Get-FileHash .\TangerineRigControl-0.3.3-preview-windows-portable.zip -Algorithm SHA256
-Get-Content .\TangerineRigControl-0.3.3-preview-windows-portable.zip.sha256
+Get-FileHash .\TangerineRigControl-0.4.0-preview-windows-x64-Setup.exe -Algorithm SHA256
+Get-Content .\TangerineRigControl-0.4.0-preview-windows-x64-Setup.exe.sha256
 ```
 
 两处哈希应一致。它用于核对下载完整性，不是代码签名或安全保证。旧产物可能没有校验文件，不应伪造一个校验值来“验证”它。
@@ -102,7 +102,7 @@ iGC.Lite 可选择 `iGCBootstrapper.exe` 入口，程序会匹配实际的 iGC.L
 - **备份**：从托盘退出后复制整个目录到自己选择的位置。正常保存只保留上一份 `.bak`，它不是长期版本历史；关键录制建议单独备份。
 - **自动恢复**：主文件损坏时尝试有效 `.bak`。恢复后保存会另存故障原文件，保留好备份。两者都不可读时禁止保存，不表示录制已删除。
 - **手动恢复**：先退出，另存现有目录，再把自己确认有效的备份复制为 `settings.xml`，重新启动核对步数。不要只凭文件大小判断备份有效。
-- **更新**：退出、备份、替换程序，再核对步数。保持固定程序目录；如果移动了 EXE，需要重新保存登录启动选项，确保路径指向当前 EXE。
-- **卸载**：先取消“Windows 登录时启动”并保存，从托盘退出，再删除程序文件夹。配置默认保留；确定不再需要且已备份后，可自行删除上述配置目录。
+- **更新**：退出、备份；安装版运行新版 Setup，便携版替换程序，再核对步数。如果从便携版转为安装版，先取消便携版登录启动，安装后按需重新启用。安装器拒绝降级，不自动更新。
+- **卸载**：安装版从托盘退出后使用 Windows“已安装的应用”卸载；便携版先取消“Windows 登录时启动”并保存、退出，再删除程序文件夹。两者均默认保留配置；安装器不会强杀进程，且仅移除指向当前安装 EXE 的启动项。确定不再需要且已备份后，可自行删除上述配置目录。详见 [安装版说明](INSTALLER.md)。
 
 程序默认只写本地配置；启用登录启动时写当前用户的 HKCU Run，不创建系统服务或管理员计划任务。不含账户、遥测、云同步或自动更新请求；不控制原厂软件自己的网络行为。

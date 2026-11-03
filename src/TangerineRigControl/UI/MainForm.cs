@@ -179,6 +179,7 @@ namespace TangerineRigControl.UI
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
+#if !INSTALLER_TEST
             var modifiers = NativeMethods.ModControl | NativeMethods.ModAlt | NativeMethods.ModNoRepeat;
             var failed = new List<string>();
             if (!NativeMethods.RegisterHotKey(Handle, HotkeyAllOn, modifiers, NativeMethods.VkF10)) failed.Add("F10");
@@ -186,6 +187,7 @@ namespace TangerineRigControl.UI
             if (!NativeMethods.RegisterHotKey(Handle, HotkeyShow, modifiers, NativeMethods.VkF12)) failed.Add("F12");
             _hotkeyWarning = failed.Count == 0 ? string.Empty : "快捷键注册失败：Ctrl+Alt+" + string.Join(" / ", failed);
             if (_status != null && failed.Count > 0) SetStatus(_hotkeyWarning);
+#endif
         }
 
         protected override void OnHandleDestroyed(EventArgs e)

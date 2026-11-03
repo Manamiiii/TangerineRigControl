@@ -10,7 +10,7 @@ namespace TangerineRigControl.Infrastructure
     internal static class StartupManager
     {
         private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
-        private const string ValueName = "TangerineRigControl";
+        private const string ValueName = AppIdentity.Name;
 
         public static void SetEnabled(bool enabled)
         {
