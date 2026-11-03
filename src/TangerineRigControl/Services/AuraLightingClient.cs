@@ -34,7 +34,11 @@ namespace TangerineRigControl.Services
                 try
                 {
                     if (_sdk == null)
-                        _sdk = (IAuraSdk2)Activator.CreateInstance(Type.GetTypeFromProgID("aura.sdk.1", true));
+                    {
+                        var sdkType = Type.GetTypeFromProgID("aura.sdk.1", false);
+                        if (sdkType == null) throw new InvalidOperationException("Aura SDK 未注册。请检查原厂 Aura 软件及服务；也可在设置中取消 SDK，使用录制方式。");
+                        _sdk = (IAuraSdk2)Activator.CreateInstance(sdkType);
+                    }
                     cancellation.ThrowIfCancellationRequested();
                     _sdk.SwitchMode();
                     if (enabled)
@@ -96,7 +100,7 @@ namespace TangerineRigControl.Services
                     var releaseFailed = false;
                     try { Release(); } catch { releaseFailed = true; }
                     var error = ex is TargetInvocationException && ex.InnerException != null ? ex.InnerException : ex;
-                    var reason = error is InvalidOperationException && error.Message.StartsWith("Aura SDK 未识别", StringComparison.Ordinal)
+                    var reason = error is InvalidOperationException && error.Message.StartsWith("Aura SDK 未", StringComparison.Ordinal)
                         ? error.Message : "华硕 SDK 操作失败（" + error.GetType().Name + " / 0x" + error.HResult.ToString("X8") + "）。";
                     throw new InvalidOperationException(reason + (releaseFailed ? " 控制权释放失败，状态未知。" : "") + " 请检查 Aura 服务，或切换到录制方式。", error);
                 }

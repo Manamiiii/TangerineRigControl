@@ -14,7 +14,7 @@ namespace TangerineRigControl.Automation
         public void Run(ApplicationTarget target, MacroDefinition macro, bool minimizeAfterAction, CancellationToken cancellation)
         {
             SettingsStore.ValidateMacro(macro);
-            if (macro.Steps.Count == 0) throw new InvalidOperationException(target.DisplayName + "尚未录制该操作。");
+            if (macro.Steps.Count == 0) throw new InvalidOperationException(target.DisplayName + "尚未录制该操作。请进入“设置与录制”，录制并保存对应的开启或关闭序列后再试。");
             cancellation.ThrowIfCancellationRequested();
             var handle = _apps.OpenAndFindWindow(target, 10000, cancellation);
             uint processId;

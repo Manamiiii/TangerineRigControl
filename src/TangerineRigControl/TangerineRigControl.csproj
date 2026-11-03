@@ -56,6 +56,7 @@
     <Compile Include="Services\AuraSession.cs" />
     <Compile Include="UI\MainForm.cs" />
     <Compile Include="UI\SettingsForm.cs" />
+    <Compile Include="UI\MacroTimingForm.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <None Include="app.manifest" />

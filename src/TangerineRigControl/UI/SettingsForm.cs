@@ -71,12 +71,13 @@ namespace TangerineRigControl.UI
             var tabs = new TabControl { Location = new Point(30, 202), Size = new Size(650, 230), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
             foreach (var target in settings.GetTargets())
             {
-                var page = new TabPage(target.DisplayName) { BackColor = BackColor, ForeColor = ForeColor };
+                var page = new TabPage(target.DisplayName) { BackColor = BackColor, ForeColor = ForeColor, Padding = new Padding(8, 12, 8, 0) };
                 TextBox pathBox;
                 var group = CreateAppGroup(target, 0, 12, out pathBox);
+                group.Dock = DockStyle.Top;
                 _paths.Add(target, pathBox);
                 page.Controls.Add(group);
-                page.Controls.Add(new Label { Text = "只录制灯光或屏幕开关，完成后保存设置。", Location = new Point(16, 140), AutoSize = true });
+                page.Controls.Add(new Label { Text = "只配置需要的设备。等待时间仅修改草稿；点击下方“保存”生效。", Location = new Point(16, 176), AutoSize = true });
                 tabs.TabPages.Add(page);
             }
             var save = CreateButton("保存", 500, 483, 72, true);
@@ -149,7 +150,7 @@ namespace TangerineRigControl.UI
             {
                 Text = target.DisplayName,
                 Location = new Point(x, y),
-                Size = new Size(622, 112),
+                Size = new Size(622, 154),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                 ForeColor = Color.White
             };
@@ -185,10 +186,24 @@ namespace TangerineRigControl.UI
 
             var on = CreateButton("录制开启（" + target.TurnOn.Steps.Count + " 步）", 16, 65, 130, false);
             var clearOn = CreateButton("清除", 150, 65, 52, false);
-            var off = CreateButton("录制关闭（" + target.TurnOff.Steps.Count + " 步）", 212, 65, 130, false);
-            var clearOff = CreateButton("清除", 346, 65, 52, false);
-            var open = CreateButton("打开原厂软件", 432, 65, 170, false);
-            open.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            var timeOn = CreateButton("等待…", 206, 65, 82, false);
+            var off = CreateButton("录制关闭（" + target.TurnOff.Steps.Count + " 步）", 316, 65, 130, false);
+            var clearOff = CreateButton("清除", 450, 65, 52, false);
+            var timeOff = CreateButton("等待…", 506, 65, 82, false);
+            timeOn.AccessibleName = target.DisplayName + "开启序列等待时间";
+            timeOff.AccessibleName = target.DisplayName + "关闭序列等待时间";
+            timeOn.Click += delegate { EditTiming(target.TurnOn); };
+            timeOff.Click += delegate { EditTiming(target.TurnOff); };
+            var open = CreateButton("打开原厂软件", 16, 109, 146, false);
+            group.Controls.Add(new Label { Text = "首次点击前等待（毫秒）", Location = new Point(182, 118), AutoSize = true });
+            var initialDelay = new NumericUpDown
+            {
+                Minimum = 0, Maximum = 30000, Increment = 100, Value = target.InitialDelayMilliseconds,
+                Location = new Point(356, 114), Size = new Size(100, 26),
+                AccessibleName = target.DisplayName + "首次点击前等待毫秒"
+            };
+            initialDelay.ValueChanged += delegate { target.InitialDelayMilliseconds = (int)initialDelay.Value; };
+            group.Controls.Add(initialDelay);
             on.Click += delegate { Record(target, target.TurnOn, on, "录制开启"); };
             off.Click += delegate { Record(target, target.TurnOff, off, "录制关闭"); };
             clearOn.AccessibleName = target.DisplayName + "清除开启序列";
@@ -228,6 +243,8 @@ namespace TangerineRigControl.UI
             group.Controls.Add(clearOn);
             group.Controls.Add(off);
             group.Controls.Add(clearOff);
+            group.Controls.Add(timeOn);
+            group.Controls.Add(timeOff);
             group.Controls.Add(open);
             return group;
         }
@@ -237,6 +254,17 @@ namespace TangerineRigControl.UI
             target.ExecutablePath = _paths[target].Text.Trim();
             if (target == _settings.MotherboardLighting || target == _settings.GpuLighting)
                 target.ProcessName = InstalledAppLocator.WindowProcessName(target.ExecutablePath);
+        }
+
+        private void EditTiming(MacroDefinition macro)
+        {
+            if (_opening) return;
+            if (macro.Steps.Count == 0)
+            {
+                MessageBox.Show(this, "请先录制对应序列，再调整等待时间。", "尚未录制", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            using (var form = new MacroTimingForm(macro)) form.ShowDialog(this);
         }
 
         private void Record(ApplicationTarget target, MacroDefinition macro, Button button, string prefix)

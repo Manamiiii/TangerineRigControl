@@ -31,6 +31,7 @@ namespace TangerineRigControl.UI
         private bool _editing;
         private CancellationTokenSource _operation;
         private string _hotkeyWarning = string.Empty;
+        private readonly List<string> _completedResults = new List<string>();
         private readonly Button _stop = CreateButton("停止操作", 38, 544, 122, false);
 
         public MainForm(RigSettings settings)
@@ -62,7 +63,7 @@ namespace TangerineRigControl.UI
             };
             var subtitle = new Label
             {
-                Text = "本地运行 · 无遥测 · Ctrl+Alt+F10 开启 · F11 关闭 · F12 显示",
+                Text = "本地运行 · 无遥测 · 快捷键均需 Ctrl+Alt：F10 开启 / F11 关闭 / F12 显示",
                 ForeColor = Color.FromArgb(166, 171, 179),
                 Location = new Point(39, 72),
                 AutoSize = true
@@ -244,9 +245,9 @@ namespace TangerineRigControl.UI
                 Location = new Point(20, 43),
                 AutoSize = true
             });
-            var on = CreateButton("开启", 432, 20, 66, true);
-            var off = CreateButton("关闭", 506, 20, 66, false);
-            var detail = CreateButton("设置", 580, 20, 66, false);
+            var on = CreateButton("开启", 392, 20, 66, true);
+            var off = CreateButton("关闭", 466, 20, 66, false);
+            var detail = CreateButton("原厂软件", 540, 20, 106, false);
             on.Anchor = off.Anchor = detail.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             on.Click += async delegate { if (!_busy) await toggle(true); };
             off.Click += async delegate { if (!_busy) await toggle(false); };
@@ -261,13 +262,13 @@ namespace TangerineRigControl.UI
         {
             await RunBusyAsync(enabled ? "正在开启全部设备…" : "正在关闭全部设备…", async delegate
             {
-                var errors = new List<string>();
                 foreach (var target in _settings.GetExecutionTargets())
                 {
                     _operation.Token.ThrowIfCancellationRequested();
-                    await TryRunDeviceAsync(target, enabled, errors);
+                    SetStatus(WithCompletedResults("正在操作" + target.DisplayName + "…"));
+                    await TryRunDeviceAsync(target, enabled, _completedResults);
                 }
-                return string.Join(Environment.NewLine, errors);
+                return string.Join(Environment.NewLine, _completedResults);
             });
         }
 
@@ -276,7 +277,7 @@ namespace TangerineRigControl.UI
             var macro = enabled ? target.TurnOn : target.TurnOff;
             if (!(_settings.UseAuraSdk && target == _settings.MotherboardLighting) && (macro == null || macro.Steps == null || macro.Steps.Count == 0))
             {
-                errors.Add(target.DisplayName + "：尚未录制");
+                errors.Add(target.DisplayName + "：已跳过，请在“设置与录制”中录制" + (enabled ? "开启" : "关闭") + "序列。");
                 return;
             }
 
@@ -315,6 +316,7 @@ namespace TangerineRigControl.UI
         {
             if (_busy || _editing) return;
             _busy = true;
+            _completedResults.Clear();
             _operation = new CancellationTokenSource();
             _stop.Enabled = true;
             SetActionButtonsEnabled(false);
@@ -325,10 +327,10 @@ namespace TangerineRigControl.UI
                 _operation.Token.ThrowIfCancellationRequested();
                 SetStatus(success);
             }
-            catch (OperationCanceledException) { SetStatus("操作已停止，部分步骤可能已生效，请确认设备状态。"); }
+            catch (OperationCanceledException) { SetStatus(WithCompletedResults("操作已停止，部分步骤可能已生效，请确认设备状态。")); }
             catch (Exception ex)
             {
-                SetStatus(ex.Message);
+                SetStatus(WithCompletedResults(ex.Message));
             }
             finally
             {
@@ -355,11 +357,28 @@ namespace TangerineRigControl.UI
 
         private string InitialStatus()
         {
-            if (!string.IsNullOrEmpty(_hotkeyWarning)) return _hotkeyWarning;
-            var ready = 0;
-            foreach (var target in _settings.GetTargets())
-                if ((_settings.UseAuraSdk && target == _settings.MotherboardLighting) || (target.TurnOn.Steps.Count > 0 && target.TurnOff.Steps.Count > 0)) ready++;
-            return "已配置：" + ready + "/4（不代表设备已连接）；SDK：" + (_settings.UseAuraSdk ? "已选用" : "未选用") + "。未配置项目请进入设置与录制。";
+            var lines = new List<string>();
+            if (!string.IsNullOrEmpty(_hotkeyWarning)) lines.Add(_hotkeyWarning);
+            lines.Add("先在“设置与录制”配置需要的设备，再单项验证开关。");
+            foreach (var target in _settings.GetExecutionTargets())
+                lines.Add(target.DisplayName + "：" + ConfigurationStatus(_settings, target));
+            return string.Join(Environment.NewLine, lines);
+        }
+
+        internal static string ConfigurationStatus(RigSettings settings, ApplicationTarget target)
+        {
+            if (settings.UseAuraSdk && target == settings.MotherboardLighting)
+                return "已选择 Aura SDK，尚未验证连接或灯效。";
+            if (target.TurnOn.Steps.Count == 0 && target.TurnOff.Steps.Count == 0)
+                return "尚未录制；无需使用的设备可留空。";
+            if (string.IsNullOrWhiteSpace(target.ExecutablePath) || !System.IO.File.Exists(target.ExecutablePath))
+                return "已有录制，原厂程序路径待配置或不可用。";
+            return "开启 " + target.TurnOn.Steps.Count + " 步 / 关闭 " + target.TurnOff.Steps.Count + " 步；实际效果待确认。";
+        }
+
+        private string WithCompletedResults(string message)
+        {
+            return _completedResults.Count == 0 ? message : string.Join(Environment.NewLine, _completedResults) + Environment.NewLine + message;
         }
 
         private void SetStatus(string text)

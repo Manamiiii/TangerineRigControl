@@ -46,7 +46,8 @@ namespace TangerineRigControl.Automation
                 Text = "1. 在原厂软件中回到稳定的起始页面。\r\n" +
                        "2. 鼠标移到要点击的位置，按 F8 记录。\r\n" +
                        "3. 手动点击该位置进入下一页，再重复记录。\r\n" +
-                       "4. 完成后点“保存序列”。每步默认等待 900ms。",
+                       "4. 每步默认等待 900ms，不记录手动等待。\r\n" +
+                       "保存序列后，还需在设置页点击“保存”。",
                 ForeColor = Color.Gainsboro
             };
 

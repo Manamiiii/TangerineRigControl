@@ -23,17 +23,21 @@ namespace TangerineRigControl.Infrastructure
                 (handle != IntPtr.Zero && !NativeMethods.IsWindowVisible(handle) && string.Equals(target.ProcessName, "iGC.Lite", StringComparison.OrdinalIgnoreCase));
             if (handle == IntPtr.Zero || needsNativeReopen)
             {
-                if (string.IsNullOrWhiteSpace(target.ExecutablePath) || !File.Exists(target.ExecutablePath))
-                {
-                    throw new InvalidOperationException(target.DisplayName + " 的程序路径尚未配置。");
-                }
-
+                var executable = ValidateExecutablePath(target);
                 cancellation.ThrowIfCancellationRequested();
-                using (var launched = Process.Start(new ProcessStartInfo(target.ExecutablePath)
+                try
                 {
-                    UseShellExecute = true,
-                    WorkingDirectory = Path.GetDirectoryName(Path.GetFullPath(target.ExecutablePath))
-                })) { }
+                    using (var launched = Process.Start(new ProcessStartInfo(executable)
+                    {
+                        UseShellExecute = true,
+                        WorkingDirectory = Path.GetDirectoryName(executable)
+                    })) { }
+                }
+                catch (System.ComponentModel.Win32Exception ex)
+                {
+                    throw new InvalidOperationException(target.DisplayName + " 启动失败（Windows 错误 " + ex.NativeErrorCode +
+                        "）。请先手动打开原厂软件，确认安装和权限正常后重试。", ex);
+                }
             }
 
             do
@@ -58,6 +62,24 @@ namespace TangerineRigControl.Infrastructure
         internal static void Wait(int milliseconds, CancellationToken cancellation)
         {
             if (cancellation.WaitHandle.WaitOne(milliseconds)) cancellation.ThrowIfCancellationRequested();
+        }
+
+        internal static string ValidateExecutablePath(ApplicationTarget target)
+        {
+            if (string.IsNullOrWhiteSpace(target.ExecutablePath))
+                throw new InvalidOperationException(target.DisplayName + " 的程序路径尚未配置。请进入“设置与录制”，选择已安装的原厂 .exe 程序。");
+            try
+            {
+                var path = Path.GetFullPath(target.ExecutablePath);
+                if (!string.Equals(Path.GetExtension(path), ".exe", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("请选择原厂 .exe 程序；不支持快捷方式、脚本或文档。");
+                if (!File.Exists(path))
+                    throw new InvalidOperationException(target.DisplayName + " 的程序路径不存在或无法访问。原录制已保留，请在“设置与录制”重新选择程序。");
+                return path;
+            }
+            catch (ArgumentException ex) { throw new InvalidOperationException("程序路径无效，请重新选择原厂 .exe 程序。", ex); }
+            catch (NotSupportedException ex) { throw new InvalidOperationException("程序路径格式不受支持，请重新选择原厂 .exe 程序。", ex); }
+            catch (PathTooLongException ex) { throw new InvalidOperationException("程序路径过长，请使用较短的原厂安装路径。", ex); }
         }
 
         internal static bool RequiresNativeReopen(string processName)

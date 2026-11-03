@@ -27,9 +27,14 @@ jobs:
           Get-Content self-test.out,self-test.err
           Write-Output "Self-test exit code: $($process.ExitCode)"
           if ($process.ExitCode -ne 0) { exit $process.ExitCode }
-      - name: Upload portable executable
+      - name: Package portable preview
+        shell: pwsh
+        run: ./tools/Package-Portable.ps1
+      - name: Upload portable package
         uses: actions/upload-artifact@v7
         with:
           name: TangerineRigControl-windows-portable
-          path: src/TangerineRigControl/bin/Release/TangerineRigControl.exe
+          path: |
+            artifacts/packages/*.zip
+            artifacts/packages/*.sha256
           if-no-files-found: error

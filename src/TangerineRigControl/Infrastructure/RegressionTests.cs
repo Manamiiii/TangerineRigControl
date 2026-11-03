@@ -1,9 +1,13 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
 using System.Threading;
+using System.Threading.Tasks;
+using System.Windows.Forms;
 using TangerineRigControl.Models;
 using TangerineRigControl.Services;
+using TangerineRigControl.UI;
 
 namespace TangerineRigControl.Infrastructure
 {
@@ -19,6 +23,10 @@ namespace TangerineRigControl.Infrastructure
             Case("settings: failed write leaves primary intact", FailedWrite);
             Case("startup: exact executable command matching", Startup);
             Case("windows: pre-cancel never starts a process", CancelWindow);
+            Case("windows: only existing executable paths may be launched", ExecutablePaths);
+            Case("onboarding: SDK selection is not connection confirmation", ConfigurationStatus);
+            Case("timings: cancel isolation, limits and legacy step preservation", TimingEditor);
+            Case("ui: settings actions fit every tab; cancellation retains prior results", UserInterface);
             Case("aura: release does not create a session; one thread owns backend", AuraOwnership);
             Case("aura: timeout quarantines session and close is bounded", AuraTimeout);
             Case("aura: cancellation and release failure are reported", AuraFailures);
@@ -27,9 +35,9 @@ namespace TangerineRigControl.Infrastructure
         private static void Case(string name, Action test)
         {
             try { test(); Console.WriteLine("PASS " + name); }
-            catch (Exception ex) { throw new InvalidOperationException("FAIL " + name + " (" + ex.GetType().Name + ")", ex); }
+            catch (Exception ex) { throw new InvalidOperationException("FAIL " + name + " (" + ex.GetType().Name + "): " + ex.Message, ex); }
         }
-        private static void Check(bool condition) { if (!condition) throw new InvalidOperationException("Assertion failed"); }
+        private static void Check(bool condition, string message = "Assertion failed") { if (!condition) throw new InvalidOperationException(message); }
         private static void Reject(Action action)
         {
             try { action(); } catch (InvalidOperationException) { return; }
@@ -161,6 +169,137 @@ namespace TangerineRigControl.Infrastructure
                 Check(stopped);
             }
         }
+
+        private static void ExecutablePaths()
+        {
+            WithFile(path =>
+            {
+                var target = new ApplicationTarget();
+                Reject(() => ExternalAppController.ValidateExecutablePath(target));
+                target.ExecutablePath = path + ".exe";
+                Reject(() => ExternalAppController.ValidateExecutablePath(target));
+                File.WriteAllText(target.ExecutablePath, "test fixture, never executed");
+                Check(ExternalAppController.ValidateExecutablePath(target) == Path.GetFullPath(target.ExecutablePath));
+                target.ExecutablePath = path + ".cmd";
+                File.WriteAllText(target.ExecutablePath, "test fixture, never executed");
+                Reject(() => ExternalAppController.ValidateExecutablePath(target));
+                target.ExecutablePath = "https://example.invalid/vendor.exe";
+                Reject(() => ExternalAppController.ValidateExecutablePath(target));
+            });
+        }
+
+        private static void ConfigurationStatus()
+        {
+            WithFile(path =>
+            {
+                var settings = new RigSettings();
+                Check(MainForm.ConfigurationStatus(settings, settings.MotherboardLighting).Contains("尚未验证"));
+                Check(MainForm.ConfigurationStatus(settings, settings.LConnect).Contains("尚未录制"));
+                settings.LConnect.TurnOn.Steps.Add(new MacroStep());
+                Check(MainForm.ConfigurationStatus(settings, settings.LConnect).Contains("路径待配置"));
+                settings.LConnect.ExecutablePath = path + ".exe";
+                File.WriteAllText(settings.LConnect.ExecutablePath, "test fixture, never executed");
+                Check(MainForm.ConfigurationStatus(settings, settings.LConnect).Contains("开启 1 步 / 关闭 0 步"));
+            });
+        }
+
+        private static void TimingEditor()
+        {
+            var previousContext = SynchronizationContext.Current;
+            try { CheckTimingEditor(); }
+            finally { SynchronizationContext.SetSynchronizationContext(previousContext); }
+        }
+
+        private static void CheckTimingEditor()
+        {
+            WithFile(path =>
+            {
+                var store = new SettingsFile(path);
+                var original = Saved(store);
+                original.LConnect.TurnOn.Steps[0].AutomationId = "legacy-id";
+                original.LConnect.TurnOn.Steps[0].ElementName = "legacy-name";
+                original.LConnect.TurnOn.Steps[0].DesiredToggleState = true;
+                original.LConnect.TurnOn.Steps.Add(new MacroStep { RelativeX = 0.6, RelativeY = 0.3 });
+                var draft = SettingsStore.Clone(original);
+                var macro = draft.LConnect.TurnOn;
+                using (var form = new MacroTimingForm(macro))
+                {
+                    ((NumericUpDown)form.Controls["delay"]).Value = 30000;
+                    Check(macro.Steps[0].DelayAfterMilliseconds == 0);
+                    // Closing without applying must leave even the settings draft unchanged.
+                }
+                Check(macro.Steps[0].DelayAfterMilliseconds == 0);
+                using (var form = new MacroTimingForm(macro))
+                {
+                    var value = (NumericUpDown)form.Controls["delay"];
+                    var steps = (ListBox)form.Controls["steps"];
+                    Check(value.Minimum == 0 && value.Maximum == 30000);
+                    value.Value = 30000;
+                    steps.SelectedIndex = 1;
+                    Check(value.Value == 900);
+                    value.Value = 0;
+                    steps.SelectedIndex = 0;
+                    Check(value.Value == 30000);
+                    form.ApplyChanges();
+                }
+                Check(original.LConnect.TurnOn.Steps[0].DelayAfterMilliseconds == 0);
+                Check(new SettingsFile(path).Load().LConnect.TurnOn.Steps[0].DelayAfterMilliseconds == 0);
+                store.Save(draft);
+                var loaded = new SettingsFile(path).Load().LConnect.TurnOn;
+                Check(loaded.Steps.Count == 2 && loaded.Steps[0].DelayAfterMilliseconds == 30000 && loaded.Steps[1].DelayAfterMilliseconds == 0);
+                Check(loaded.Steps[0].RelativeX == 0.25 && loaded.Steps[0].RelativeY == 0.75);
+                Check(loaded.Steps[0].AutomationId == "legacy-id" && loaded.Steps[0].ElementName == "legacy-name" && loaded.Steps[0].DesiredToggleState == true);
+            });
+        }
+
+        private static void UserInterface()
+        {
+            var previousContext = SynchronizationContext.Current;
+            try
+            {
+                using (var settings = new SettingsForm(new RigSettings()))
+                {
+                    // Lay out offscreen without Show/Shown or activating any vendor application.
+                    typeof(Control).GetMethod("SetState", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(settings, new object[] { 2, true });
+                    settings.CreateControl();
+                    TabControl tabs = null;
+                    foreach (Control control in settings.Controls) if (control is TabControl) tabs = (TabControl)control;
+                    Check(tabs != null);
+                    foreach (var size in new[] { settings.MinimumSize, new System.Drawing.Size(900, 650) })
+                    {
+                        settings.Size = size;
+                        foreach (TabPage page in tabs.TabPages)
+                        {
+                            tabs.SelectedTab = page;
+                            settings.PerformLayout();
+                            page.PerformLayout();
+                            GroupBox group = null;
+                            foreach (Control control in page.Controls) if (control is GroupBox) group = (GroupBox)control;
+                            Check(group != null && page.ClientRectangle.Contains(group.Bounds), "Device group exceeds tab: " + page.Text);
+                            foreach (Control control in group.Controls)
+                                Check(group.ClientRectangle.Contains(control.Bounds), "Control exceeds device group: " + control.Text);
+                        }
+                    }
+                }
+                using (var main = new MainForm(new RigSettings()))
+                {
+                    var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                    var results = (System.Collections.Generic.List<string>)typeof(MainForm).GetField("_completedResults", flags).GetValue(main);
+                    Func<Task<string>> canceled = delegate
+                    {
+                        results.Add("fixture: first device sequence completed");
+                        throw new OperationCanceledException();
+                    };
+                    var task = (Task)typeof(MainForm).GetMethod("RunBusyAsync", flags).Invoke(main, new object[] { "fixture", canceled });
+                    Check(task.IsCompleted);
+                    task.GetAwaiter().GetResult();
+                    var status = (TextBox)typeof(MainForm).GetField("_status", flags).GetValue(main);
+                    Check(status.Text.Contains("first device sequence completed") && status.Text.Contains("操作已停止"));
+                }
+            }
+            finally { SynchronizationContext.SetSynchronizationContext(previousContext); }
+        }
+
         private sealed class FakeAura : IAuraBackend
         {
             internal int CreatedOn;
