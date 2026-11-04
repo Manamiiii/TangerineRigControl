@@ -13,11 +13,13 @@ foreach ($setup in @($OldSetup, $NewSetup)) {
     if ([Diagnostics.FileVersionInfo]::GetVersionInfo($setup).ProductName -ne $name) { throw 'Refusing to install a production identity in fixture tests.' }
 }
 $install = Join-Path $env:LOCALAPPDATA ('Programs/' + $name)
+$legacyInstall = $install
+$newInstall = Join-Path $env:LOCALAPPDATA ('Programs/Tangerine/' + $name)
 $data = Join-Path $env:LOCALAPPDATA $name
 $shortcut = Join-Path ([Environment]::GetFolderPath('Programs')) ($name + '.lnk')
 $key = 'HKCU:/Software/Microsoft/Windows/CurrentVersion/Uninstall/{7F88F898-795F-4D59-8E60-369D5A59630A}'
 $run = 'HKCU:/Software/Microsoft/Windows/CurrentVersion/Run'
-if ((Test-Path -LiteralPath $install) -or (Test-Path -LiteralPath $data) -or (Test-Path -LiteralPath $key) -or (Test-Path -LiteralPath $shortcut) -or
+if ((Test-Path -LiteralPath $newInstall) -or (Test-Path -LiteralPath $install) -or (Test-Path -LiteralPath $data) -or (Test-Path -LiteralPath $key) -or (Test-Path -LiteralPath $shortcut) -or
     ($null -ne (Get-ItemProperty -LiteralPath $run -Name $name -ErrorAction SilentlyContinue))) {
     throw 'Fixture identity already exists. Preserve it and inspect the previous test before rerunning.'
 }
@@ -35,6 +37,13 @@ function Assert-Test([bool]$condition, [string]$label) {
     if (-not $condition) { throw ('FAIL ' + $label) }
     $script:checks++
     Write-Output ('PASS ' + $label)
+}
+function Run-Uninstall([int]$expected) {
+    # As in a normal uninstall, execute a temporary copy so the installed copy can be removed.
+    $copy = Join-Path ([IO.Path]::GetTempPath()) ('rig-uninstall-' + [Guid]::NewGuid().ToString('N') + '.exe')
+    Copy-Item -LiteralPath (Join-Path $install 'Uninstall.exe') -Destination $copy
+    try { Run-Setup $copy @('/S', ('_?=' + $install)) $expected }
+    finally { Remove-Item -LiteralPath $copy }
 }
 function Run-Setup([string]$path, [string[]]$arguments, [int]$expected) {
     $p = Start-Process -FilePath $path -ArgumentList $arguments -WindowStyle Hidden -PassThru
@@ -67,6 +76,9 @@ try {
     Assert-Test ((Get-ItemProperty -LiteralPath $key).InstallLocation -eq $install) 'per-user uninstall registration'
     Assert-Test ((Get-ItemProperty -LiteralPath $key).DisplayVersion -eq [Diagnostics.FileVersionInfo]::GetVersionInfo($OldSetup).FileVersion) 'old fixture version registered'
     Run-Setup (Join-Path $install 'TangerineRigControl.exe') @('--fixture-startup-test') 0
+    Set-ItemProperty -LiteralPath $key -Name InstallLocation -Value (Split-Path $newInstall)
+    try { Run-Setup $NewSetup @('/S') 22 }
+    finally { Set-ItemProperty -LiteralPath $key -Name InstallLocation -Value $legacyInstall }
     $legacy = New-Object Threading.Mutex($false, ('Local\' + $name + '.SingleInstance'))
     try { Run-Setup $NewSetup @('/S') 20 } finally { $legacy.Dispose() }
     $lease = [IO.File]::Open((Join-Path $data '.lifecycle.lock'), 'OpenOrCreate', 'ReadWrite', 'None')
@@ -76,7 +88,7 @@ try {
     $before = (Get-FileHash -LiteralPath $settings).Hash
     $exeHash = (Get-FileHash -LiteralPath (Join-Path $install 'TangerineRigControl.exe')).Hash
     Run-Setup $NewSetup @('/S') 20
-    Run-Setup (Join-Path $install 'Uninstall.exe') @('/S', ('_?=' + $install)) 20
+    Run-Uninstall 20
     Assert-Test (-not $script:process.HasExited) 'running application was not killed'
     Assert-Test ((Get-FileHash -LiteralPath $settings).Hash -eq $before -and (Get-FileHash -LiteralPath (Join-Path $install 'TangerineRigControl.exe')).Hash -eq $exeHash) 'blocked operations leave executable and data unchanged'
     Stop-Fixture
@@ -89,6 +101,7 @@ try {
     Stop-Fixture
     Run-Setup $NewSetup @('/S') 0
     Assert-Test ((Get-ItemProperty -LiteralPath $key).DisplayVersion -eq [Diagnostics.FileVersionInfo]::GetVersionInfo($NewSetup).FileVersion) 'upgrade registers new fixture version'
+    Assert-Test ((Get-ItemProperty -LiteralPath $key).InstallLocation -eq $legacyInstall -and -not (Test-Path -LiteralPath $newInstall)) 'registered legacy installation is upgraded in place'
     Assert-Test ((Get-FileHash -LiteralPath $settings).Hash -eq $before) 'upgrade preserves XML byte for byte'
     Assert-Test ((Get-FileHash -LiteralPath ($settings + '.bak')).Hash -eq $backup) 'upgrade preserves backup byte for byte'
     Run-Setup $OldSetup @('/S') 23
@@ -97,20 +110,27 @@ try {
     if (-not (Test-Path -LiteralPath $run)) { New-Item -Path $run | Out-Null }
     Set-ItemProperty -LiteralPath $run -Name $name -Value ('"' + (Join-Path $install 'TangerineRigControl.exe') + '" --startup')
     Set-Content -LiteralPath (Join-Path $install 'user-added.txt') -Value 'synthetic extra file'
-    Run-Setup (Join-Path $install 'Uninstall.exe') @('/S', ('_?=' + $install)) 0
+    Run-Uninstall 0
     Assert-Test (-not (Test-Path -LiteralPath $key) -and -not (Test-Path -LiteralPath $shortcut)) 'uninstall removes registration and shortcut'
     Assert-Test ($null -eq (Get-ItemProperty -LiteralPath $run -Name $name -ErrorAction SilentlyContinue)) 'uninstall removes its own startup entry'
     Assert-Test ((Test-Path -LiteralPath (Join-Path $install 'user-added.txt')) -and (Get-FileHash -LiteralPath $settings).Hash -eq $before) 'uninstall retains user-added file and data'
     Assert-Test ((Get-FileHash -LiteralPath ($settings + '.bak')).Hash -eq $backup) 'uninstall preserves backup byte for byte'
+    $install = $newInstall
     Run-Setup $NewSetup @('/S') 0
+    Assert-Test ((Get-ItemProperty -LiteralPath $key).InstallLocation -eq $newInstall) 'fresh install after legacy uninstall selects suite directory'
+    $shell = New-Object -ComObject WScript.Shell
+    $link = $shell.CreateShortcut($shortcut)
+    $exe = Join-Path $install 'TangerineRigControl.exe'
+    Assert-Test ($link.TargetPath -eq $exe -and $link.Arguments -eq '' -and $link.WorkingDirectory -eq $install -and $link.IconLocation -eq ($exe + ',0')) 'shortcut launches the installed binary with its own icon and working directory'
     Start-Fixture '--fixture-read'
     Stop-Fixture
     Set-ItemProperty -LiteralPath $run -Name $name -Value 'fixture-unrelated-entry'
-    Run-Setup (Join-Path $install 'Uninstall.exe') @('/S', ('_?=' + $install)) 0
+    Run-Uninstall 0
     Assert-Test ((Get-ItemPropertyValue -LiteralPath $run -Name $name) -eq 'fixture-unrelated-entry') 'uninstall preserves unrelated startup command'
     Remove-ItemProperty -LiteralPath $run -Name $name
     # Only fixture-owned paths, verified against the exact expected identity, may be removed.
-    foreach ($owned in @($install, $data)) {
+    Assert-Test (Test-Path -LiteralPath (Split-Path $newInstall)) 'shared suite parent survives uninstall'
+    foreach ($owned in @($legacyInstall, $newInstall, $data)) {
         if (Test-Path -LiteralPath $owned) {
             $resolved = (Resolve-Path -LiteralPath $owned).Path
             $expected = [IO.Path]::GetFullPath($owned)

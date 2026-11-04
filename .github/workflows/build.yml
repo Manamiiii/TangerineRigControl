@@ -47,7 +47,7 @@ jobs:
         run: |
           msbuild TangerineRigControl.sln /t:Rebuild /p:Configuration=Release /p:DefineConstants=INSTALLER_TEST "/p:OutputPath=$pwd/artifacts/fixture/build/" "/p:IntermediateOutputPath=$pwd/artifacts/fixture/obj/" /m
           if ($LASTEXITCODE -ne 0) { throw 'Fixture build failed' }
-          ./tools/Package-Windows.ps1 -Fixture -FixtureVersion 0.3.9.0 -ExecutablePath artifacts/fixture/build/TangerineRigControl.exe -OutputDirectory artifacts/fixture/old -MakensisPath artifacts/nsis/makensis.exe
+          ./tools/Package-Windows.ps1 -Fixture -LegacyFixtureLayout -FixtureVersion 0.3.9.0 -ExecutablePath artifacts/fixture/build/TangerineRigControl.exe -OutputDirectory artifacts/fixture/old -MakensisPath artifacts/nsis/makensis.exe
           ./tools/Package-Windows.ps1 -Fixture -ExecutablePath artifacts/fixture/build/TangerineRigControl.exe -OutputDirectory artifacts/fixture/new -MakensisPath artifacts/nsis/makensis.exe
       - name: Verify isolated installer lifecycle
         shell: pwsh

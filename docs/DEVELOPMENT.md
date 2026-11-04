@@ -8,7 +8,7 @@
 - Visual Studio 2022 Build Tools 的“.NET 桌面生成工具”。
 - .NET Framework 4.8 Developer Pack（运行环境不能替代编译用的引用程序集）。
 
-项目使用 C# 5、WinForms、Win32 和 Aura COM，没有需要随 EXE 分发的第三方运行时库，不捆绑厂商 DLL。图标由 `tools/Generate-AppIcon.ps1` 生成。
+项目使用 C# 5、WinForms、Win32 和 Aura COM，没有需要随 EXE 分发的第三方运行时库，不捆绑厂商 DLL。图标由 `tools/Generate-AppIcon.ps1` 绘制，自包含的 `app.ico` 用于主程序和安装器。可用 Python 3 运行 `tools/verify_windows_icons.py <Setup.exe> <主程序.exe>` 比对 EXE 中索引 0 的全部图标帧；该检查只读取 PE 资源。
 
 ## 构建并自检
 

@@ -14,7 +14,7 @@
 
 <img src="docs/images/main-window.png" alt="TangerineRigControl 主界面：四组设备开关、设置与录制、停止操作及首次配置提示" width="680">
 
-*当前程序的真实界面，以空白合成配置渲染；图中的 SDK 选项不代表已连接设备。*
+*此图为更换图标前的程序界面，以空白合成配置渲染；图中的 SDK 选项不代表已连接设备。*
 
 ## 适合哪些设备
 
@@ -31,7 +31,7 @@
 
 运行要求：Windows 10/11 **x64**、**.NET Framework 4.8 或 4.8.1**，以及所需设备的原厂软件。先确认原厂软件能手动开关设备。缺少运行环境时参阅 [Microsoft 安装说明](https://learn.microsoft.com/en-us/dotnet/framework/install/)。普通用户不需要源码、Node、npm、Python 或 Rust。macOS、Linux、Windows ARM64 尚未支持或验证。
 
-**0.4.1 预览版已加入 Setup 构建，但尚未公开发布安装包或创建 Release。** 当前 CI 只验证，不上传安装产物；可以按 [开发说明](docs/DEVELOPMENT.md) 自行构建。历史 [0.3.3 便携包构建](https://github.com/Manamiiii/TangerineRigControl/actions/runs/41575988118) 的 Artifacts 可能仍可下载，需要登录 GitHub且产物未过期；它不是新版 Setup。
+**0.4.2 预览版已加入 Setup 构建，但尚未公开发布安装包或创建 Release。** 当前 CI 只验证，不上传安装产物；可以按 [开发说明](docs/DEVELOPMENT.md) 自行构建。历史 [0.3.3 便携包构建](https://github.com/Manamiiii/TangerineRigControl/actions/runs/41575988118) 的 Artifacts 可能仍可下载，需要登录 GitHub且产物未过期；它不是新版 Setup。
 
 获得对应版本的包后：
 
@@ -91,6 +91,19 @@
 欢迎通过 [设备兼容性反馈](https://github.com/Manamiiii/TangerineRigControl/issues/new?template=compatibility_report.md) 分享设备型号、原厂软件版本以及单次和重复操作的实际表现，成功和失败的结果都有帮助。可按 [设备验收清单](docs/NIGHTLY-DEVICE-TEST.md) 检查；遇到错误先看 [排错指南](docs/USAGE.md#出现问题时)。
 
 开发者可阅读 [构建、自检与打包说明](docs/DEVELOPMENT.md)。项目采用 C# 5、WinForms 和 .NET Framework 4.8，保持本地、轻量的架构。
+
+## 项目目录
+
+| 要找的内容 | 位置 |
+| --- | --- |
+| 程序源码 | [WinForms 工程](src/TangerineRigControl/)，其中 UI 是窗口，Automation 是录制，Infrastructure 是配置与系统适配，Services 是灯效接口 |
+| 使用、构建与安装说明 | [使用与排错](docs/USAGE.md)、[开发说明](docs/DEVELOPMENT.md)、[安装版说明](docs/INSTALLER.md) |
+| 测试 | 工程内的 [自检](src/TangerineRigControl/Infrastructure/SelfTest.cs) 与 [回归用例](src/TangerineRigControl/Infrastructure/RegressionTests.cs)，[隔离安装检查](tools/Test-Installer.ps1) 与 [托管机正式身份检查](tools/Test-ProductionInstaller.ps1) |
+| 构建与打包 | [解决方案](TangerineRigControl.sln)、[便携包脚本](tools/Package-Portable.ps1)、[Windows 打包脚本](tools/Package-Windows.ps1)、[NSIS 安装器配置](packaging/windows/installer.nsi) |
+| 图标 | [图形绘制源](tools/Generate-AppIcon.ps1) 生成 [多尺寸 ICO 和 PNG 预览](src/TangerineRigControl/Assets/)，主程序、托盘、Setup 和开始菜单共用 |
+| 本地生成物 | 忽略的 `artifacts/windows/` 默认存放正式身份 Setup、Portable 及校验值。按轮次整理时分别使用 `final/`、`fixture-old/`、`fixture-new/` 及构建日志目录。fixture 仅供测试 |
+
+正常入口直接启动 EXE，工作目录取程序目录。登录启动使用同一 EXE 的 `--startup` 参数，开发自检使用 `--self-test`。正常运行无需启动脚本、专用环境变量或监听端口。Portable 与安装版继续共享本用户配置和单实例锁。从托盘正常退出后再切换入口。
 
 ## License
 

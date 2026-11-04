@@ -4,7 +4,7 @@
 
 ## 用户安装与更新
 
-- `TangerineRigControl-<版本>-windows-x64-Setup.exe`：当前用户安装，不请求管理员权限；固定安装到 `%LOCALAPPDATA%\Programs\TangerineRigControl`，添加当前用户开始菜单快捷方式和 Windows 卸载入口。
+- `TangerineRigControl-<版本>-windows-x64-Setup.exe`：当前用户安装，不请求管理员权限；新装默认进入 `%LOCALAPPDATA%\Programs\Tangerine\TangerineRigControl`，添加当前用户开始菜单快捷方式和 Windows 卸载入口。
 - `TangerineRigControl-<版本>-windows-portable.zip`：保留免安装使用方式。
 - 两者使用相同的应用身份和 `%LOCALAPPDATA%\TangerineRigControl` 配置，不要同时运行。源码不预置个人安装路径或录制坐标。
 - 需要 .NET Framework 4.8/4.8.1 和对应原厂软件。安装器不联网下载组件，不安装服务，不设置自动启动，也不启动程序；安装结束后从开始菜单打开。
@@ -16,6 +16,8 @@
 - 首版未签名。核对仓库来源和 SHA-256，不关闭系统安全保护。尚未进行干净 Windows 普通账户验收，也不代表真实设备已验收。
 
 .NET 检查按 Microsoft 的 [Release 注册表值说明](https://learn.microsoft.com/en-us/dotnet/framework/install/how-to-determine-which-versions-are-installed)，要求 `Release >= 528040`，对应 .NET Framework 4.8 或更高版本。未安装运行环境的真实系统拒绝流程仍需在独立环境验证；不会通过修改本机系统注册表来模拟验收。
+
+旧安装登记指向 `%LOCALAPPDATA%\Programs\TangerineRigControl` 且卸载命令匹配时，Setup 会在旧目录升级。位置未知、登记不一致、目标已有未登记的同名载荷或同名开始菜单入口与预期目标/参数不符时停止。卸载按文件清单删除本产品文件，只尝试移除空的产品目录。共享的 `Programs\Tangerine` 目录由各工具共用。
 
 ## 构建
 
@@ -41,7 +43,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\Package-Windows.ps1
 
 `INSTALLER_TEST` 条件编译生成独立的 `TangerineRigControl.InstallerTest`：独立数据目录、启动项、互斥量、AppUserModelID 和卸载 GUID。它禁用全局快捷键与原厂路径发现，只用虚构 XML，显示实际主窗口并按测试信号正常退出。正式二进制不包含测试启动模式。
 
-CI 编译独立 fixture，分别打包低版本号与当前版本号的 Setup，运行 `tools/Test-Installer.ps1 -OldSetup <旧fixture> -NewSetup <新fixture>`。检查安装、窗口启动、保存重开、运行中拒绝安装/卸载、升级保留 XML、拒绝降级、卸载保留数据、重装恢复、启动项和额外文件保护；同时调用真实的关闭到托盘与托盘退出处理函数，并在测试身份下验证应用保存设置不会误删其他路径的自启项。已有 fixture 身份、互斥量或应用进程时拒绝测试，不覆盖前一次遗留数据、不结束进程。
+CI 编译独立 fixture，分别打包使用传统布局的低版本号与使用新布局的当前版本号 Setup，运行 `tools/Test-Installer.ps1 -OldSetup <旧fixture> -NewSetup <新fixture>`。检查安装、窗口启动、保存重开、运行中拒绝安装/卸载、升级保留 XML、拒绝降级、卸载保留数据、重装恢复、启动项和额外文件保护；同时调用真实的关闭到托盘与托盘退出处理函数，并在测试身份下验证应用保存设置不会误删其他路径的自启项。已有 fixture 身份、互斥量或应用进程时拒绝测试，不覆盖前一次遗留数据、不结束进程。
 
 正式身份静默检查由 `tools/Test-ProductionInstaller.ps1` 执行，仅允许 GitHub 临时托管运行机；预先确认安装目录、配置、快捷方式、注册项及进程均不存在，再创建虚构 XML。覆盖安装、同版本覆盖、锁保护、卸载保留配置/备份、自启项归属、重装和已安装程序自检，核对安装后的 EXE 与受测构建一致。不在开发者电脑中重定向或覆盖真实配置，不启动正式程序主界面或原厂软件。具体通过状态见对应提交的 CI 日志。
 

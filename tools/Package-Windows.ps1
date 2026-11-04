@@ -6,6 +6,7 @@ param(
     [string]$OutputDirectory = 'artifacts/windows',
     [string]$MakensisPath,
     [switch]$Fixture,
+    [switch]$LegacyFixtureLayout,
     [string]$FixtureVersion
 )
 $ErrorActionPreference = 'Stop'
@@ -34,7 +35,7 @@ if ($peOffset -lt 0 -or $peOffset + 26 -gt $bytes.Length -or
     [BitConverter]::ToUInt16($bytes, $peOffset + 4) -ne 0x8664) { throw 'Setup requires a Windows x64 application binary.' }
 $appName = if ($Fixture) { 'TangerineRigControl.InstallerTest' } else { 'TangerineRigControl' }
 if ($info.ProductName -ne $appName) { throw 'Application identity does not match the requested installer identity.' }
-if (-not $Fixture -and $FixtureVersion) { throw 'Only isolated fixtures may override the installer version.' }
+if (-not $Fixture -and ($FixtureVersion -or $LegacyFixtureLayout)) { throw 'Only isolated fixtures may override the installer version.' }
 $numeric = if ($FixtureVersion) { $FixtureVersion } else { $info.FileVersion }
 if ($numeric -notmatch '^\d+\.\d+\.\d+\.\d+$') { throw 'Invalid numeric installer version.' }
 $label = if ($Fixture) { $numeric + '-fixture' } else { $info.ProductVersion }
@@ -69,6 +70,13 @@ try {
     ) | Set-Content -LiteralPath $remove -Encoding UTF8
     $check = Join-Path $work 'directories.nsh'
     @(
+        '${If} $RegisteredDir == ""'
+        foreach ($relative in @('Uninstall.exe') + @($payloadFiles | ForEach-Object { Relative-NSIS $_.FullName })) {
+            '  ${If} ${FileExists} "$INSTDIR\' + $relative + '"'
+            '    !insertmacro Fail 22 "Unregistered files already exist in the target folder. Verify ownership before installing."'
+            '  ${EndIf}'
+        }
+        '${EndIf}'
         foreach ($dir in $payloadDirs) {
             'System::Call ''kernel32::GetFileAttributesW(w "$INSTDIR\' + (Relative-NSIS $dir.FullName) + '") i .r0'''
             '${If} $0 != -1'
@@ -82,6 +90,7 @@ try {
     $arguments = @('/V2', '/INPUTCHARSET', 'UTF8', "/DAPP_NAME=$appName", "/DAPP_GUID=$appGuid", "/DNUMERIC_VERSION=$numeric",
         "/DPAYLOAD=$payload", "/DOUTPUT_FILE=$setup", "/DREMOVE_MANIFEST=$remove", "/DDIRECTORY_CHECKS=$check", "/DLICENSE_PAGE=$licensePage",
         (Join-Path $root 'packaging/windows/installer.nsi'))
+    if ($LegacyFixtureLayout) { $arguments = @('/DLEGACY_FIXTURE_LAYOUT') + $arguments }
     & $MakensisPath @arguments
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $setup)) { throw 'NSIS build failed.' }
     $hash = (Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash.ToLowerInvariant()

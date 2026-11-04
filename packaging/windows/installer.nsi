@@ -8,10 +8,14 @@ SetCompressor /SOLID zlib
 !include x64.nsh
 !include WinVer.nsh
 !include WordFunc.nsh
+!include Win\COM.nsh
 
 Name "${APP_NAME}"
 OutFile "${OUTPUT_FILE}"
-InstallDir "$LOCALAPPDATA\Programs\${APP_NAME}"
+!define LEGACY_DIR "$LOCALAPPDATA\Programs\${APP_NAME}"
+!define SUITE_DIR "$LOCALAPPDATA\Programs\Tangerine"
+!define DEFAULT_DIR "${SUITE_DIR}\${APP_NAME}"
+InstallDir "${DEFAULT_DIR}"
 VIProductVersion "${NUMERIC_VERSION}"
 VIAddVersionKey /LANG=1033 "ProductName" "${APP_NAME}"
 VIAddVersionKey /LANG=1033 "FileDescription" "${APP_NAME} per-user Setup"
@@ -35,6 +39,7 @@ Icon "${PAYLOAD}\source\src\TangerineRigControl\Assets\app.ico"
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_GUID}"
 Var InstanceMutex
 Var DataLock
+Var RegisteredDir
 
 !macro Fail CODE MESSAGE
     MessageBox MB_OK|MB_ICONEXCLAMATION "${MESSAGE}" /SD IDOK
@@ -59,14 +64,69 @@ Var DataLock
     ${EndIf}
 !macroend
 
-!macro CheckInstallPath
-    ; Fixed per-user location, including /D overrides. Never remove arbitrary directories.
-    StrCpy $INSTDIR "$LOCALAPPDATA\Programs\${APP_NAME}"
-    System::Call 'kernel32::GetFileAttributesW(w "$INSTDIR") i .r0'
+!macro CheckDirectory PATH
+    System::Call 'kernel32::GetFileAttributesW(w "${PATH}") i .r0'
     ${If} $0 != -1
         IntOp $1 $0 & 0x400
         ${If} $1 != 0
-            !insertmacro Fail 22 "安装目录不能是符号链接或目录联接。请检查安装位置。"
+            !insertmacro Fail 22 "安装位置含有目录联接或符号链接，请核对目录。"
+        ${EndIf}
+    ${EndIf}
+!macroend
+
+!macro ResolveInstallPath
+    ReadRegStr $RegisteredDir HKCU "${UNINSTALL_KEY}" "InstallLocation"
+    ${If} $RegisteredDir == ""
+        ClearErrors
+        EnumRegValue $0 HKCU "${UNINSTALL_KEY}" 0
+        ${IfNot} ${Errors}
+            !insertmacro Fail 22 "已有卸载登记缺少安装位置，已停止操作。"
+        ${EndIf}
+        !ifdef LEGACY_FIXTURE_LAYOUT
+            StrCpy $INSTDIR "${LEGACY_DIR}"
+        !else
+            StrCpy $INSTDIR "${DEFAULT_DIR}"
+        !endif
+    ${Else}
+        ${If} $RegisteredDir != "${LEGACY_DIR}"
+        ${AndIf} $RegisteredDir != "${DEFAULT_DIR}"
+            !insertmacro Fail 22 "卸载登记指向未知目录，已停止操作。"
+        ${EndIf}
+        ReadRegStr $0 HKCU "${UNINSTALL_KEY}" "UninstallString"
+        ${If} $0 != '$\"$RegisteredDir\Uninstall.exe$\"'
+            !insertmacro Fail 22 "卸载命令与登记路径不匹配，已停止操作。"
+        ${EndIf}
+        StrCpy $INSTDIR $RegisteredDir
+    ${EndIf}
+    !insertmacro CheckDirectory "$LOCALAPPDATA\Programs"
+    ${If} $INSTDIR == "${DEFAULT_DIR}"
+        !insertmacro CheckDirectory "${SUITE_DIR}"
+    ${EndIf}
+    !insertmacro CheckDirectory "$INSTDIR"
+!macroend
+
+; Read the link's raw target without resolving or executing it.
+!macro CheckShortcut
+    StrCpy $R0 ""
+    ${If} ${FileExists} "$SMPROGRAMS\${APP_NAME}.lnk"
+        !insertmacro ComHlpr_CreateInProcInstance ${CLSID_ShellLink} ${IID_IShellLink} r0 ""
+        ${If} $0 P<> 0
+            ${IUnknown::QueryInterface} $0 '("${IID_IPersistFile}",.r1)'
+            ${If} $1 P<> 0
+                ${IPersistFile::Load} $1 '("$SMPROGRAMS\${APP_NAME}.lnk",0).r3'
+                ${If} $3 == 0
+                    ${IShellLink::GetPath} $0 '(.r4,${NSIS_MAX_STRLEN},0,4).r3'
+                    ${If} $3 == 0
+                        ${IShellLink::GetArguments} $0 '(.r5,${NSIS_MAX_STRLEN}).r3'
+                        ${If} $3 == 0
+                        ${AndIf} $5 == ""
+                            StrCpy $R0 $4
+                        ${EndIf}
+                    ${EndIf}
+                ${EndIf}
+                ${IUnknown::Release} $1 ""
+            ${EndIf}
+            ${IUnknown::Release} $0 ""
         ${EndIf}
     ${EndIf}
 !macroend
@@ -84,8 +144,13 @@ Function .onInit
     ${If} $0 < 528040
         !insertmacro Fail 21 "需要 .NET Framework 4.8 或 4.8.1。请先安装 Microsoft 官方运行环境；此安装器不会提权或自动下载组件。"
     ${EndIf}
-    !insertmacro CheckInstallPath
     !insertmacro AcquireLocks
+    !insertmacro ResolveInstallPath
+    !insertmacro CheckShortcut
+    ${If} ${FileExists} "$SMPROGRAMS\${APP_NAME}.lnk"
+    ${AndIf} $R0 != "$INSTDIR\TangerineRigControl.exe"
+        !insertmacro Fail 22 "同名开始菜单入口属于其他位置，已停止安装。"
+    ${EndIf}
     !include "${DIRECTORY_CHECKS}"
     ReadRegStr $0 HKCU "${UNINSTALL_KEY}" "DisplayVersion"
     ${If} $0 != ""
@@ -97,14 +162,17 @@ Function .onInit
 FunctionEnd
 
 Section "Install"
-    SetOutPath "$INSTDIR"
     ClearErrors
+    SetOutPath "$INSTDIR"
+    ${If} ${Errors}
+        !insertmacro Fail 24 "安装目录不可写，请检查当前用户的目录权限。"
+    ${EndIf}
     File /r "${PAYLOAD}\*"
     ${If} ${Errors}
         !insertmacro Fail 24 "程序文件写入失败。请检查磁盘空间和目录权限，保留配置后重新运行安装器。"
     ${EndIf}
     WriteUninstaller "$INSTDIR\Uninstall.exe"
-    CreateShortcut "$SMPROGRAMS\${APP_NAME}.lnk" "$INSTDIR\TangerineRigControl.exe"
+    CreateShortcut "$SMPROGRAMS\${APP_NAME}.lnk" "$INSTDIR\TangerineRigControl.exe" "" "$INSTDIR\TangerineRigControl.exe" 0
     WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayName" "${APP_NAME}"
     WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayVersion" "${NUMERIC_VERSION}"
     WriteRegStr HKCU "${UNINSTALL_KEY}" "Publisher" "Manamiiii"
@@ -122,16 +190,17 @@ SectionEnd
 Function un.onInit
     SetShellVarContext current
     SetRegView 64
-    !insertmacro CheckInstallPath
+    !insertmacro AcquireLocks
     ReadRegStr $0 HKCU "${UNINSTALL_KEY}" "InstallLocation"
     ${If} $0 != $INSTDIR
         !insertmacro Fail 22 "安装记录与位置不匹配，已停止卸载。"
     ${EndIf}
-    !insertmacro AcquireLocks
+    !insertmacro ResolveInstallPath
     !include "${DIRECTORY_CHECKS}"
 FunctionEnd
 
 Section "Uninstall"
+    !insertmacro CheckShortcut
     ; Generated exact file list: never recursively delete user-added files or data.
     !include "${REMOVE_MANIFEST}"
     ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${APP_NAME}"
@@ -139,7 +208,9 @@ Section "Uninstall"
     ${OrIf} $0 == '$\"$INSTDIR\TangerineRigControl.exe$\"'
         DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${APP_NAME}"
     ${EndIf}
-    Delete "$SMPROGRAMS\${APP_NAME}.lnk"
+    ${If} $R0 == "$INSTDIR\TangerineRigControl.exe"
+        Delete "$SMPROGRAMS\${APP_NAME}.lnk"
+    ${EndIf}
     DeleteRegKey HKCU "${UNINSTALL_KEY}"
     Delete "$INSTDIR\Uninstall.exe"
     RMDir "$INSTDIR"
