@@ -15,6 +15,12 @@
 - 本项目属于通用开源工具：GPL-3.0-only、Windows x64 WinForms / .NET Framework 工具。复用现有原厂软件适配，不承诺通用硬件兼容，不增加账户、云同步、遥测或付费能力。
 - 修改前阅读 `README.md`、`docs/DEVELOPMENT.md`、`docs/INSTALLER.md`；涉及控制行为时阅读 `docs/USAGE.md` 和 `docs/NIGHTLY-DEVICE-TEST.md`。
 
+## 程序与运行数据
+
+- 新装程序默认 `%LOCALAPPDATA%\Tangerine\Apps\TangerineRigControl`，已登记的两代 Programs 位置原位维护。源码构建、Portable 与安装版共用 `%LOCALAPPDATA%\Tangerine\Data\TangerineRigControl`，只建实际需要的 Config、Backups、Runtime、Temp。
+- 旧默认数据首次复制须校验原件、保留恢复记录；未知文件、多来源冲突、中断或旧版改写时停止，禁止静默覆盖、双写或删除迁移凭据。维护同时保持旧路径兼容锁和新 Runtime 锁，不改变 XML schema。具体目录、恢复及系统例外见 `docs/DATA.md`。
+- 不在用户主机测试正式身份安装、真实数据迁移或替换日常入口。独立 fixture 与托管 CI 分层验证。包内不包含测试 profile、配置或机器路径，不引入跨仓库运行/构建依赖。
+
 ## 硬件与数据边界
 
 - 默认维护不启动原厂软件、不发送真实点击、不切换灯光或屏幕、不修改系统音量或实际登录启动项。实际设备验证须有当次明确授权。

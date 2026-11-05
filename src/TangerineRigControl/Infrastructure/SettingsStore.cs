@@ -10,14 +10,25 @@ namespace TangerineRigControl.Infrastructure
 {
     internal static class SettingsStore
     {
-        private static readonly string SettingsDirectory = AppIdentity.DataDirectory;
-
-        internal static readonly string SettingsPath = Path.Combine(SettingsDirectory, "settings.xml");
+        private static readonly DataLayout Layout = new DataLayout(AppIdentity.DataDirectory, AppIdentity.LegacyDataDirectory);
+        internal static string SettingsPath { get { return Layout.SettingsPath; } }
 
         internal static string LoadWarning { get; private set; }
-        private static readonly SettingsFile FileStore = new SettingsFile(SettingsPath);
-        internal static string LoadSource { get { return FileStore.Source; } }
-        internal static bool CanSave { get { return FileStore.CanSave; } }
+        private static SettingsFile _fileStore;
+        private static SettingsFile FileStore
+        {
+            get
+            {
+                if (_fileStore == null)
+                {
+                    Layout.Prepare();
+                    _fileStore = new SettingsFile(SettingsPath, Layout.BackupPath, Layout.TempDirectory, Layout.VerifySource);
+                }
+                return _fileStore;
+            }
+        }
+        internal static string LoadSource { get { return _fileStore == null ? null : _fileStore.Source; } }
+        internal static bool CanSave { get { return _fileStore != null && _fileStore.CanSave; } }
 
         internal static RigSettings Clone(RigSettings settings)
         {
@@ -113,6 +124,8 @@ namespace TangerineRigControl.Infrastructure
     internal sealed class SettingsFile
     {
         private readonly string _path;
+        private readonly string _backup, _temp;
+        private readonly Action _guard;
         private byte[] _snapshot;
         private bool _loaded;
         private bool _blocked;
@@ -121,10 +134,12 @@ namespace TangerineRigControl.Infrastructure
         internal string Source { get; private set; }
         internal bool CanSave { get { return _loaded && !_blocked; } }
 
-        internal SettingsFile(string path) { _path = path; }
+        internal SettingsFile(string path, string backup = null, string temp = null, Action guard = null)
+        { _path = path; _backup = backup ?? path + ".bak"; _temp = temp ?? Path.GetDirectoryName(path); _guard = guard; }
 
         internal RigSettings Load()
         {
+            if (_guard != null) _guard();
             Warning = null;
             _blocked = false;
             _recovered = false;
@@ -134,7 +149,7 @@ namespace TangerineRigControl.Infrastructure
             {
                 _snapshot = File.Exists(_path) ? File.ReadAllBytes(_path) : null;
                 if (_snapshot != null) { var value = Read(_snapshot); Source = "主配置"; return value; }
-                if (!File.Exists(_path + ".bak")) { Source = "首次配置"; return new RigSettings(); }
+                if (!File.Exists(_backup)) { Source = "首次配置"; return new RigSettings(); }
             }
             catch (Exception ex)
             {
@@ -149,7 +164,7 @@ namespace TangerineRigControl.Infrastructure
             }
             try
             {
-                var value = Read(File.ReadAllBytes(_path + ".bak"));
+                var value = Read(File.ReadAllBytes(_backup));
                 _recovered = true;
                 Source = "备份恢复（未保存）";
                 Warning = "主配置无法使用，已读取有效备份。保存时会另存故障原文件，不覆盖现有备份。请核对各组步数。";
@@ -171,7 +186,7 @@ namespace TangerineRigControl.Infrastructure
                 ex is System.Xml.XmlException || ex is System.Security.SecurityException || ex is ArgumentException;
         }
 
-        private static RigSettings Read(byte[] data)
+        internal static RigSettings Read(byte[] data)
         {
             var document = new System.Xml.XmlDocument { XmlResolver = null };
             using (var stream = new MemoryStream(data))
@@ -192,12 +207,15 @@ namespace TangerineRigControl.Infrastructure
 
         internal void Save(RigSettings settings)
         {
+            if (_guard != null) _guard();
             if (!_loaded || _blocked) throw new InvalidOperationException("配置处于恢复保护，不能覆盖保存；请恢复有效配置后重启。");
             SettingsStore.Validate(settings);
             var current = File.Exists(_path) ? File.ReadAllBytes(_path) : null;
             if (!Equal(current, _snapshot)) throw new InvalidOperationException("配置文件已被其他程序修改，请重启后重新读取，当前草稿未覆盖磁盘。");
             Directory.CreateDirectory(Path.GetDirectoryName(_path));
-            var temporaryPath = _path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            Directory.CreateDirectory(Path.GetDirectoryName(_backup));
+            Directory.CreateDirectory(_temp);
+            var temporaryPath = Path.Combine(_temp, "settings.xml." + Guid.NewGuid().ToString("N") + ".tmp");
             try
             {
                 using (var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
@@ -210,10 +228,10 @@ namespace TangerineRigControl.Infrastructure
                 {
                     if (_recovered)
                     {
-                        File.Copy(_path, _path + ".recovery-" + Guid.NewGuid().ToString("N"), false);
+                        File.Copy(_path, Path.Combine(Path.GetDirectoryName(_backup), "settings.xml.recovery-" + Guid.NewGuid().ToString("N")), false);
                         File.Replace(temporaryPath, _path, null);
                     }
-                    else File.Replace(temporaryPath, _path, _path + ".bak");
+                    else File.Replace(temporaryPath, _path, _backup);
                 }
                 else File.Move(temporaryPath, _path);
                 _snapshot = written;

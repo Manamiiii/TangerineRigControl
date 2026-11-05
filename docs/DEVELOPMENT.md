@@ -17,8 +17,8 @@
 ```powershell
 msbuild TangerineRigControl.sln /p:Configuration=Release
 if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
-$p = Start-Process src\TangerineRigControl\bin\Release\TangerineRigControl.exe -ArgumentList '--self-test' -PassThru
-if (-not $p.WaitForExit(60000)) { $p.Kill(); throw 'Self-test timed out' }
+$p = Start-Process src\TangerineRigControl\bin\Release\TangerineRigControl.exe -ArgumentList '--self-test' -WindowStyle Hidden -PassThru
+if (-not $p.WaitForExit(60000)) { throw 'Self-test timed out; process preserved for inspection' }
 $p.WaitForExit()
 if ($p.ExitCode -ne 0) { throw "Self-test failed: $($p.ExitCode)" }
 ```
@@ -27,7 +27,7 @@ if ($p.ExitCode -ne 0) { throw "Self-test failed: $($p.ExitCode)" }
 
 项目默认编译 x64。Windows Setup 构建方式、固定 NSIS 版本及隔离安装测试见 [安装版说明](INSTALLER.md)；`tools/Package-Windows.ps1` 同时生成 Setup 和 Portable，不需要分别重复打包。
 
-自检覆盖配置恢复、旧配置迁移、等待编辑、窗口保护、界面布局和 SDK 超时等边界，不能证明真实灯效或全部软件版本兼容。设备验证见 [验收清单](NIGHTLY-DEVICE-TEST.md)。
+自检覆盖集中目录的复制校验、迁移中断/冲突/旧版改写保护、配置恢复、旧配置迁移、等待编辑、窗口保护、界面布局和 SDK 超时等边界，不能证明真实灯效或全部软件版本兼容。设备验证见 [验收清单](NIGHTLY-DEVICE-TEST.md)。
 
 ## 打包
 

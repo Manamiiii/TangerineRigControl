@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+﻿# SPDX-License-Identifier: GPL-3.0-only
 # Copyright (c) 2026 Manamiiii
 [CmdletBinding()]
 param(
@@ -15,12 +15,13 @@ $ExecutablePath = (Resolve-Path -LiteralPath $ExecutablePath).Path
 $name = 'TangerineRigControl'
 if ([Diagnostics.FileVersionInfo]::GetVersionInfo($Setup).ProductName -ne $name -or
     [Diagnostics.FileVersionInfo]::GetVersionInfo($ExecutablePath).ProductName -ne $name) { throw 'Expected production identity.' }
-$install = Join-Path $env:LOCALAPPDATA ('Programs/Tangerine/' + $name)
-$data = Join-Path $env:LOCALAPPDATA $name
+$install = Join-Path $env:LOCALAPPDATA ('Tangerine/Apps/' + $name)
+$legacyData = Join-Path $env:LOCALAPPDATA $name
+$data = Join-Path $env:LOCALAPPDATA ('Tangerine/Data/' + $name)
 $shortcut = Join-Path ([Environment]::GetFolderPath('Programs')) ($name + '.lnk')
 $key = 'HKCU:/Software/Microsoft/Windows/CurrentVersion/Uninstall/{D9BC8BD8-3A19-4798-A233-18C4B5B62BE4}'
 $run = 'HKCU:/Software/Microsoft/Windows/CurrentVersion/Run'
-foreach ($path in @($install, (Join-Path $env:LOCALAPPDATA ('Programs/' + $name)), $data, $shortcut, $key)) {
+foreach ($path in @($install, (Join-Path $env:LOCALAPPDATA ('Programs/' + $name)), (Join-Path $env:LOCALAPPDATA ('Programs/Tangerine/' + $name)), $legacyData, $data, $shortcut, $key)) {
     if (Test-Path -LiteralPath $path) { throw 'Existing production environment detected. Nothing was replaced.' }
 }
 if ($null -ne (Get-ItemProperty -LiteralPath $run -Name $name -ErrorAction SilentlyContinue)) { throw 'Existing startup entry detected.' }
@@ -48,9 +49,10 @@ function Run-Checked([string]$path, [string[]]$arguments, [int]$expected) {
     $p.WaitForExit()
     Assert-Test ($p.ExitCode -eq $expected) ('exit code ' + $expected)
 }
-New-Item -ItemType Directory -Path $data | Out-Null
-$settings = Join-Path $data 'settings.xml'
-$backup = $settings + '.bak'
+New-Item -ItemType Directory -Path (Join-Path $data 'Config') -Force | Out-Null
+$settings = Join-Path $data 'Config/settings.xml'
+$backup = Join-Path $data 'Backups/settings.xml.bak'
+New-Item -ItemType Directory -Path (Split-Path $backup) | Out-Null
 # Only synthetic configuration. Tests do not start the normal app or any vendor software.
 '<RigSettings><SchemaVersion>1</SchemaVersion><UseAuraSdk>false</UseAuraSdk><LConnect><InitialDelayMilliseconds>777</InitialDelayMilliseconds></LConnect></RigSettings>' |
     Set-Content -LiteralPath $settings -Encoding UTF8
@@ -73,7 +75,7 @@ try {
     Run-Checked $Setup @('/S') 20
     Run-Uninstall 20
 } finally { $guard.Dispose() }
-$lease = [IO.File]::Open((Join-Path $data '.lifecycle.lock'), 'Open', 'ReadWrite', 'None')
+$lease = [IO.File]::Open((Join-Path $data 'Runtime/.lifecycle.lock'), 'Open', 'ReadWrite', 'None')
 try { Run-Checked $Setup @('/S') 20 } finally { $lease.Dispose() }
 Run-Checked $Setup @('/S') 0
 Assert-Test ((Get-FileHash -LiteralPath $settings).Hash -eq $dataHash -and (Get-FileHash -LiteralPath $backup).Hash -eq $dataHash) 'same-version reinstall preserves synthetic settings and backup'

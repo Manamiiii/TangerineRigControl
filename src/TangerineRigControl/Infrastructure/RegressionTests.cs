@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-only
+﻿// SPDX-License-Identifier: GPL-3.0-only
 // Copyright (c) 2026 Manamiiii
 
 using System;
@@ -20,6 +20,8 @@ namespace TangerineRigControl.Infrastructure
         {
             Case("settings: round trip, zero delay, draft isolation", RoundTrip);
             Case("installer: lifecycle lock excludes another process and can reopen", LifecycleLock);
+            Case("data: fresh layout and preserved legacy migration", DataMigration);
+            Case("data: conflicts, interruption, old-version edits and damaged sources", DataProtection);
             Case("settings: legacy backend migration", Legacy);
             Case("settings: recovery preserves good backup and damaged bytes", Recovery);
             Case("settings: unreadable files cannot be overwritten", Blocked);
@@ -50,6 +52,94 @@ namespace TangerineRigControl.Infrastructure
                 }
                 using (AppIdentity.AcquireLifecycleLock(directory)) { }
             });
+        }
+
+        private static void DataMigration()
+        {
+            WithFile(path =>
+            {
+                var directory = Path.GetDirectoryName(path);
+                var legacy = Path.Combine(directory, "legacy");
+                var root = Path.Combine(directory, "Tangerine", "Data", "synthetic");
+                var layout = new DataLayout(root, legacy);
+                layout.Prepare();
+                var store = new SettingsFile(layout.SettingsPath, layout.BackupPath, layout.TempDirectory, layout.VerifySource);
+                Saved(store);
+                store.Save(store.Load());
+                Check(File.Exists(layout.SettingsPath) && File.Exists(layout.BackupPath));
+                Check(Directory.GetFiles(layout.TempDirectory).Length == 0);
+                Check(new SettingsFile(layout.SettingsPath, layout.BackupPath).Load().Kanali.TurnOff.Steps.Count == 1);
+            });
+            WithFile(path =>
+            {
+                var legacy = Path.GetDirectoryName(path);
+                var old = new SettingsFile(path);
+                var value = Saved(old); old.Save(value);
+                var original = File.ReadAllText(path);
+                var backup = File.ReadAllText(path + ".bak");
+                var recovery = path + ".recovery-" + Guid.NewGuid().ToString("N");
+                File.WriteAllText(recovery, "damaged original retained");
+                // Two historic program locations both used this same legacy configuration.
+                var root = Path.Combine(Path.GetTempPath(), "TangerineRigControl-test-" + Guid.NewGuid().ToString("N"));
+                try
+                {
+                    var layout = new DataLayout(root, legacy);
+                    layout.Prepare(); layout.Prepare();
+                    Check(File.ReadAllText(layout.SettingsPath) == original && File.ReadAllText(layout.BackupPath) == backup);
+                    Check(File.ReadAllText(Path.Combine(root, "Backups", Path.GetFileName(recovery))) == "damaged original retained");
+                    var store = new SettingsFile(layout.SettingsPath, layout.BackupPath, layout.TempDirectory, layout.VerifySource);
+                    var loaded = store.Load(); loaded.Kanali.InitialDelayMilliseconds = 321; store.Save(loaded);
+                    Check(File.ReadAllText(path) == original && File.ReadAllText(path + ".bak") == backup);
+                    layout.Prepare();
+                    Check(new SettingsFile(layout.SettingsPath, layout.BackupPath).Load().Kanali.InitialDelayMilliseconds == 321);
+                    // Simulate using an old portable version after leaving the new one.
+                    old.Save(value);
+                    File.AppendAllText(path, " ");
+                    Reject(() => layout.Prepare());
+                    Reject(() => store.Save(loaded));
+                    Check(new SettingsFile(layout.SettingsPath, layout.BackupPath).Load().Kanali.InitialDelayMilliseconds == 321);
+                }
+                finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+            });
+        }
+
+        private static void DataProtection()
+        {
+            foreach (var scenario in new[] { "conflict", "interrupted", "partial-commit", "source-change", "damaged", "newer", "unknown", "backup-only" })
+                WithFile(path =>
+                {
+                    var baseDir = Path.GetDirectoryName(path);
+                    var legacy = Path.Combine(baseDir, "legacy");
+                    var oldPath = Path.Combine(legacy, "settings.xml");
+                    Saved(new SettingsFile(oldPath));
+                    var original = File.ReadAllText(oldPath);
+                    var root = Path.Combine(baseDir, "new");
+                    var layout = new DataLayout(root, legacy);
+                    if (scenario == "backup-only")
+                    {
+                        File.Move(oldPath, oldPath + ".bak");
+                        layout.Prepare();
+                        var store = new SettingsFile(layout.SettingsPath, layout.BackupPath, layout.TempDirectory, layout.VerifySource);
+                        store.Save(store.Load());
+                        Check(File.ReadAllText(oldPath + ".bak") == original && File.Exists(layout.SettingsPath));
+                        return;
+                    }
+                    if (scenario == "conflict") Saved(new SettingsFile(layout.SettingsPath));
+                    if (scenario == "damaged") File.WriteAllText(oldPath, "invalid XML");
+                    if (scenario == "newer") File.WriteAllText(oldPath, original.Replace("<SchemaVersion>1</SchemaVersion>", "<SchemaVersion>999</SchemaVersion>"));
+                    if (scenario == "unknown") File.WriteAllText(Path.Combine(legacy, "unknown.xml"), "unrecognized source");
+                    var before = File.ReadAllText(oldPath);
+                    Action interruption = null;
+                    if (scenario == "interrupted" || scenario == "partial-commit") interruption = () => { throw new InvalidOperationException("synthetic interrupted copy"); };
+                    if (scenario == "source-change") interruption = () => File.AppendAllText(oldPath, " ");
+                    Reject(() => layout.Prepare(interruption));
+                    if (scenario == "partial-commit")
+                        Directory.Move(Path.Combine(root, "Runtime", "migration-pending", "Config"), Path.Combine(root, "Config"));
+                    Reject(() => layout.Prepare());
+                    Check(File.ReadAllText(oldPath) == before + (scenario == "source-change" ? " " : ""));
+                    if (scenario == "interrupted" || scenario == "partial-commit" || scenario == "source-change")
+                        Check(Directory.Exists(Path.Combine(root, "Runtime", "migration-pending")));
+                });
         }
 
         private static void Case(string name, Action test)

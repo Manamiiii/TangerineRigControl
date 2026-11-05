@@ -33,6 +33,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Infrastructure\AppIdentity.cs" />
+    <Compile Include="Infrastructure\DataLayout.cs" />
     <Compile Include="Infrastructure\InstallerSmokeTest.cs" />
     <Reference Include="System" />
     <Reference Include="System.Core" />

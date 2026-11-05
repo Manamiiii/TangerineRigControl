@@ -13,7 +13,9 @@ SetCompressor /SOLID zlib
 Name "${APP_NAME}"
 OutFile "${OUTPUT_FILE}"
 !define LEGACY_DIR "$LOCALAPPDATA\Programs\${APP_NAME}"
-!define SUITE_DIR "$LOCALAPPDATA\Programs\Tangerine"
+!define PREVIOUS_DIR "$LOCALAPPDATA\Programs\Tangerine\${APP_NAME}"
+!define SUITE_DIR "$LOCALAPPDATA\Tangerine\Apps"
+!define DATA_DIR "$LOCALAPPDATA\Tangerine\Data\${APP_NAME}"
 !define DEFAULT_DIR "${SUITE_DIR}\${APP_NAME}"
 InstallDir "${DEFAULT_DIR}"
 VIProductVersion "${NUMERIC_VERSION}"
@@ -25,7 +27,7 @@ Icon "${PAYLOAD}\source\src\TangerineRigControl\Assets\app.ico"
 !define MUI_ICON "${PAYLOAD}\source\src\TangerineRigControl\Assets\app.ico"
 !define MUI_UNICON "${PAYLOAD}\source\src\TangerineRigControl\Assets\app.ico"
 !define MUI_ABORTWARNING
-!define MUI_WELCOMEPAGE_TEXT "仅为当前 Windows 用户安装，不需要管理员权限。$\r$\n$\r$\n程序位于本用户的 Programs 目录；升级和卸载默认保留 LocalAppData 中的配置。$\r$\n$\r$\n请先从托盘退出 TangerineRigControl，再继续安装。"
+!define MUI_WELCOMEPAGE_TEXT "仅为当前 Windows 用户安装，不需要管理员权限。$\r$\n$\r$\n新装程序位于本用户 Tangerine\Apps；升级和卸载默认保留配置。$\r$\n$\r$\n请先从托盘退出 TangerineRigControl，再继续安装。"
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "${LICENSE_PAGE}"
 !insertmacro MUI_PAGE_INSTFILES
@@ -39,6 +41,7 @@ Icon "${PAYLOAD}\source\src\TangerineRigControl\Assets\app.ico"
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_GUID}"
 Var InstanceMutex
 Var DataLock
+Var CurrentDataLock
 Var RegisteredDir
 
 !macro Fail CODE MESSAGE
@@ -56,11 +59,25 @@ Var RegisteredDir
     ${OrIf} $1 == 183
         !insertmacro Fail 20 "程序或另一个安装器正在运行。请从托盘退出程序，完成其他安装操作后重试；不会强制结束进程。"
     ${EndIf}
+    !insertmacro CheckDirectory "$LOCALAPPDATA"
+    !insertmacro CheckDirectory "$LOCALAPPDATA\${APP_NAME}"
+    !insertmacro CheckDirectory "$LOCALAPPDATA\${APP_NAME}\.lifecycle.lock"
+    !insertmacro CheckDirectory "$LOCALAPPDATA\Tangerine"
+    !insertmacro CheckDirectory "$LOCALAPPDATA\Tangerine\Data"
+    !insertmacro CheckDirectory "${DATA_DIR}"
+    !insertmacro CheckDirectory "${DATA_DIR}\Runtime"
+    !insertmacro CheckDirectory "${DATA_DIR}\Runtime\.lifecycle.lock"
     CreateDirectory "$LOCALAPPDATA\${APP_NAME}"
     System::Call 'kernel32::CreateFileW(w "$LOCALAPPDATA\${APP_NAME}\.lifecycle.lock", i 0xC0000000, i 0, p 0, i 4, i 0x80, p 0) p .r0'
     StrCpy $DataLock $0
     ${If} $0 == -1
         !insertmacro Fail 20 "配置目录正在使用或不可写。请退出本用户其他会话中的程序，再检查目录权限后重试。"
+    ${EndIf}
+    CreateDirectory "${DATA_DIR}\Runtime"
+    System::Call 'kernel32::CreateFileW(w "${DATA_DIR}\Runtime\.lifecycle.lock", i 0xC0000000, i 0, p 0, i 4, i 0x80, p 0) p .r0'
+    StrCpy $CurrentDataLock $0
+    ${If} $0 == -1
+        !insertmacro Fail 20 "集中数据目录正在使用或不可写，已停止维护。"
     ${EndIf}
 !macroend
 
@@ -85,11 +102,16 @@ Var RegisteredDir
         !ifdef LEGACY_FIXTURE_LAYOUT
             StrCpy $INSTDIR "${LEGACY_DIR}"
         !else
-            StrCpy $INSTDIR "${DEFAULT_DIR}"
+            !ifdef SUITE_FIXTURE_LAYOUT
+                StrCpy $INSTDIR "${PREVIOUS_DIR}"
+            !else
+                StrCpy $INSTDIR "${DEFAULT_DIR}"
+            !endif
         !endif
     ${Else}
         ${If} $RegisteredDir != "${LEGACY_DIR}"
         ${AndIf} $RegisteredDir != "${DEFAULT_DIR}"
+        ${AndIf} $RegisteredDir != "${PREVIOUS_DIR}"
             !insertmacro Fail 22 "卸载登记指向未知目录，已停止操作。"
         ${EndIf}
         ReadRegStr $0 HKCU "${UNINSTALL_KEY}" "UninstallString"
@@ -99,9 +121,8 @@ Var RegisteredDir
         StrCpy $INSTDIR $RegisteredDir
     ${EndIf}
     !insertmacro CheckDirectory "$LOCALAPPDATA\Programs"
-    ${If} $INSTDIR == "${DEFAULT_DIR}"
-        !insertmacro CheckDirectory "${SUITE_DIR}"
-    ${EndIf}
+    !insertmacro CheckDirectory "$LOCALAPPDATA\Programs\Tangerine"
+    !insertmacro CheckDirectory "${SUITE_DIR}"
     !insertmacro CheckDirectory "$INSTDIR"
 !macroend
 

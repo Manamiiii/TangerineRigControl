@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+﻿# SPDX-License-Identifier: GPL-3.0-only
 # Copyright (c) 2026 Manamiiii
 
 [CmdletBinding()]
@@ -20,7 +20,7 @@ if ([string]::IsNullOrWhiteSpace($version) -or $version -notmatch '^[a-zA-Z0-9._
 if ([IO.Path]::GetFileName($ExecutablePath) -ne 'TangerineRigControl.exe') { throw 'Expected TangerineRigControl.exe.' }
 
 # Explicit allowlist: never copy an entire build directory, local settings or vendor DLLs.
-$documents = @('LICENSE', 'THIRD-PARTY-NOTICES.md', 'README.md', 'docs/USAGE.md', 'docs/DEVELOPMENT.md', 'docs/INSTALLER.md', 'docs/NIGHTLY-DEVICE-TEST.md', 'docs/images/main-window.png', 'packaging/windows/NSIS-LICENSE.txt')
+$documents = @('LICENSE', 'THIRD-PARTY-NOTICES.md', 'README.md', 'docs/USAGE.md', 'docs/DEVELOPMENT.md', 'docs/INSTALLER.md', 'docs/DATA.md', 'docs/NIGHTLY-DEVICE-TEST.md', 'docs/images/main-window.png', 'packaging/windows/NSIS-LICENSE.txt')
 $projectPath = 'src/TangerineRigControl/TangerineRigControl.csproj'
 [xml]$project = Get-Content -LiteralPath (Join-Path $repositoryRoot $projectPath) -Raw
 $sourceFiles = $documents + @('TangerineRigControl.sln', $projectPath, 'tools/Package-Portable.ps1', 'tools/Package-Windows.ps1', 'tools/Test-Installer.ps1', 'tools/Test-ProductionInstaller.ps1', 'tools/Check-PublicContent.ps1', 'tools/Generate-AppIcon.ps1', 'tools/verify_windows_icons.py', 'packaging/windows/installer.nsi')

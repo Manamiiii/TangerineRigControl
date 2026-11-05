@@ -4,9 +4,9 @@
 
 ## 用户安装与更新
 
-- `TangerineRigControl-<版本>-windows-x64-Setup.exe`：当前用户安装，不请求管理员权限；新装默认进入 `%LOCALAPPDATA%\Programs\Tangerine\TangerineRigControl`，添加当前用户开始菜单快捷方式和 Windows 卸载入口。
+- `TangerineRigControl-<版本>-windows-x64-Setup.exe`：当前用户安装，不请求管理员权限；新装默认进入 `%LOCALAPPDATA%\Tangerine\Apps\TangerineRigControl`，添加当前用户开始菜单快捷方式和 Windows 卸载入口。
 - `TangerineRigControl-<版本>-windows-portable.zip`：保留免安装使用方式。
-- 两者使用相同的应用身份和 `%LOCALAPPDATA%\TangerineRigControl` 配置，不要同时运行。源码不预置个人安装路径或录制坐标。
+- 两者使用相同的应用身份和 `%LOCALAPPDATA%\Tangerine\Data\TangerineRigControl` 配置，不要同时运行。源码不预置个人安装路径或录制坐标。
 - 需要 .NET Framework 4.8/4.8.1 和对应原厂软件。安装器不联网下载组件，不安装服务，不设置自动启动，也不启动程序；安装结束后从开始菜单打开。
 - 更新：从托盘退出程序，备份配置，下载并核对新版 Setup 的 SHA-256，然后手动运行。已有版本直接覆盖程序文件，保留配置；安装器拒绝降级。无后台自动更新。
 - 卸载：从托盘退出，在 Windows“已安装的应用”中卸载。保留配置、备份及额外放入安装目录的文件；只删除指向当前安装 EXE 的本应用登录启动项。重装后读取原配置。
@@ -17,7 +17,7 @@
 
 .NET 检查按 Microsoft 的 [Release 注册表值说明](https://learn.microsoft.com/en-us/dotnet/framework/install/how-to-determine-which-versions-are-installed)，要求 `Release >= 528040`，对应 .NET Framework 4.8 或更高版本。未安装运行环境的真实系统拒绝流程仍需在独立环境验证；不会通过修改本机系统注册表来模拟验收。
 
-旧安装登记指向 `%LOCALAPPDATA%\Programs\TangerineRigControl` 且卸载命令匹配时，Setup 会在旧目录升级。位置未知、登记不一致、目标已有未登记的同名载荷或同名开始菜单入口与预期目标/参数不符时停止。卸载按文件清单删除本产品文件，只尝试移除空的产品目录。共享的 `Programs\Tangerine` 目录由各工具共用。
+旧安装登记指向 `%LOCALAPPDATA%\Programs\TangerineRigControl` 或 `%LOCALAPPDATA%\Programs\Tangerine\TangerineRigControl`，且卸载命令匹配时，Setup 会在旧目录升级。位置未知、登记不一致、目标已有未登记的同名载荷或同名开始菜单入口与预期目标/参数不符时停止。卸载按文件清单删除本产品文件，只尝试移除空的产品目录。共享根、`Apps`、`Data`、其他工具及旧 `Programs\Tangerine` 父目录都不删除。安装器只维护程序与锁，不迁移配置；首次正常启动的复制、校验与失败保护见 [数据说明](DATA.md)。
 
 ## 构建
 
@@ -37,16 +37,18 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\Package-Windows.ps1
 
 输出在 `artifacts/windows`：Setup、Portable 和各自 `.sha256`，同名产物不会被覆盖。`-ExecutablePath`、`-OutputDirectory` 可指定其他位置。Setup 包含相应 GPL 源码及构建材料；NSIS 第三方声明见 [THIRD-PARTY-NOTICES](../THIRD-PARTY-NOTICES.md)。
 
-正式 ID：`Manamiiii.TangerineRigControl`；卸载 GUID：`{D9BC8BD8-3A19-4798-A233-18C4B5B62BE4}`。请勿随版本改变。应用与安装器共同使用旧单实例互斥量和本用户数据目录的独占文件锁，避免安装期间新开程序；不修改 XML schema。
+正式 ID：`Manamiiii.TangerineRigControl`；卸载 GUID：`{D9BC8BD8-3A19-4798-A233-18C4B5B62BE4}`。请勿随版本改变。应用与安装器共同使用旧单实例互斥量和旧数据目录与新 `Runtime` 目录的两把独占文件锁，避免安装期间新开程序；不修改 XML schema。
 
 ## 自动验证范围
 
 `INSTALLER_TEST` 条件编译生成独立的 `TangerineRigControl.InstallerTest`：独立数据目录、启动项、互斥量、AppUserModelID 和卸载 GUID。它禁用全局快捷键与原厂路径发现，只用虚构 XML，显示实际主窗口并按测试信号正常退出。正式二进制不包含测试启动模式。
 
-CI 编译独立 fixture，分别打包使用传统布局的低版本号与使用新布局的当前版本号 Setup，运行 `tools/Test-Installer.ps1 -OldSetup <旧fixture> -NewSetup <新fixture>`。检查安装、窗口启动、保存重开、运行中拒绝安装/卸载、升级保留 XML、拒绝降级、卸载保留数据、重装恢复、启动项和额外文件保护；同时调用真实的关闭到托盘与托盘退出处理函数，并在测试身份下验证应用保存设置不会误删其他路径的自启项。已有 fixture 身份、互斥量或应用进程时拒绝测试，不覆盖前一次遗留数据、不结束进程。
+CI 编译独立 fixture，分别打包使用两代旧 Programs 布局的低版本号与新 Apps 布局的当前版本号 Setup，运行 `tools/Test-Installer.ps1 -OldSetup <旧fixture> -NewSetup <新fixture>`。检查安装、窗口启动、保存重开、运行中拒绝安装/卸载、升级保留 XML、拒绝降级、卸载保留数据、重装恢复、启动项和额外文件保护；同时调用真实的关闭到托盘与托盘退出处理函数，并在测试身份下验证应用保存设置不会误删其他路径的自启项。已有 fixture 身份、互斥量或应用进程时拒绝测试，不覆盖前一次遗留数据、不结束进程。
 
 正式身份静默检查由 `tools/Test-ProductionInstaller.ps1` 执行，仅允许 GitHub 临时托管运行机；预先确认安装目录、配置、快捷方式、注册项及进程均不存在，再创建虚构 XML。覆盖安装、同版本覆盖、锁保护、卸载保留配置/备份、自启项归属、重装和已安装程序自检，核对安装后的 EXE 与受测构建一致。不在开发者电脑中重定向或覆盖真实配置，不启动正式程序主界面或原厂软件。具体通过状态见对应提交的 CI 日志。
 
 低版本 fixture 仅验证安装器升级，不代表真实历史业务迁移；正式身份同版本覆盖不等于跨版本升级验证。GitHub 运行机不等于干净 Windows 10/11 普通账户，正式交互式完整安装/卸载、登录后实际自启、缺少 .NET 的系统和真实设备效果须分别验收。上一候选的欢迎页、许可证显示与取消流程已人工核对，但不替代完整生命周期检查。JSON、浏览器存储、OCR 与 Web 安全边界不适用于此原生工具。
 
 CI 不创建 Release，也不上传公开安装包；只保留检查日志。公开发布仍需人工决定。
+
+本机禁止可见窗口时，可加 `-Headless` 运行 fixture 的保存、重开与静默安装检查。此模式使用持锁替身覆盖运行中维护拒绝，未执行实际托盘窗口生命周期；CI 默认使用完整窗口 fixture。`-PreviousSuiteLayout` 配合 `-SuiteFixtureLayout` 打包的旧号夹具验证第二代路径。两者都是当前源码的低版本号夹具，不代表历史业务迁移。

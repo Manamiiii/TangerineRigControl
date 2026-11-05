@@ -38,7 +38,7 @@ namespace TangerineRigControl
                     return 2;
                 }
 
-                FileStream lifecycle;
+                IDisposable lifecycle;
                 try { lifecycle = AppIdentity.AcquireLifecycleLock(); }
                 catch (IOException)
                 {
@@ -49,23 +49,45 @@ namespace TangerineRigControl
                 }
                 catch (UnauthorizedAccessException)
                 {
+#if !INSTALLER_TEST
                     MessageBox.Show("无法访问本机配置目录，请检查当前用户的文件权限。", "TangerineRigControl");
+#endif
                     return 3;
+                }
+                catch (InvalidOperationException ex)
+                {
+#if !INSTALLER_TEST
+                    MessageBox.Show(ex.Message, "数据目录保护");
+#else
+                    Console.Error.WriteLine(ex.GetType().Name);
+#endif
+                    return 4;
                 }
                 using (lifecycle)
                 {
-                    SetCurrentProcessExplicitAppUserModelID(AppIdentity.ModelId);
-                    Application.EnableVisualStyles();
-                    Application.SetCompatibleTextRenderingDefault(false);
+                    try
+                    {
+                        SetCurrentProcessExplicitAppUserModelID(AppIdentity.ModelId);
+                        Application.EnableVisualStyles();
+                        Application.SetCompatibleTextRenderingDefault(false);
 #if INSTALLER_TEST
-                    return InstallerSmokeTest.Run(args);
+                        return InstallerSmokeTest.Run(args);
 #else
-                    var settings = SettingsStore.Load();
-                    settings.StartMinimized = args != null && Array.Exists(args, arg => string.Equals(arg, "--startup", StringComparison.OrdinalIgnoreCase));
-                    if (!string.IsNullOrEmpty(SettingsStore.LoadWarning))
-                        MessageBox.Show(SettingsStore.LoadWarning, "配置读取提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    Application.Run(new MainForm(settings));
+                        var settings = SettingsStore.Load();
+                        settings.StartMinimized = args != null && Array.Exists(args, arg => string.Equals(arg, "--startup", StringComparison.OrdinalIgnoreCase));
+                        if (!string.IsNullOrEmpty(SettingsStore.LoadWarning))
+                            MessageBox.Show(SettingsStore.LoadWarning, "配置读取提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        Application.Run(new MainForm(settings));
 #endif
+                    }
+                    catch (Exception ex)
+                    {
+                        if (!(ex is IOException || ex is UnauthorizedAccessException || ex is InvalidOperationException)) throw;
+#if !INSTALLER_TEST
+                        MessageBox.Show("无法安全读取配置，程序已停止。请保留新旧数据目录并按数据说明核对。\n" + ex.Message, "数据目录保护");
+#endif
+                        return 4;
+                    }
                 }
             }
 #if !INSTALLER_TEST

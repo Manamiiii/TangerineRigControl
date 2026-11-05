@@ -15,20 +15,33 @@ namespace TangerineRigControl.Infrastructure
         internal const string ModelId = "Manamiiii.TangerineRigControl";
 #endif
         internal const string MutexName = "Local\\" + Name + ".SingleInstance";
-        internal static readonly string DataDirectory = Path.Combine(
+        internal static readonly string LegacyDataDirectory = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Name);
+        internal static readonly string DataDirectory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Tangerine", "Data", Name);
+        internal static readonly string RuntimeDirectory = Path.Combine(DataDirectory, "Runtime");
 
         // Shared with Setup/uninstall, including other sessions of the same Windows user.
-        internal static FileStream AcquireLifecycleLock()
+        internal static IDisposable AcquireLifecycleLock()
         {
-            return AcquireLifecycleLock(DataDirectory);
+            var legacy = AcquireLifecycleLock(LegacyDataDirectory);
+            try { return new LockPair(legacy, AcquireLifecycleLock(RuntimeDirectory)); }
+            catch { legacy.Dispose(); throw; }
         }
 
         internal static FileStream AcquireLifecycleLock(string directory)
         {
+            DataLayout.EnsureOrdinaryPath(Path.Combine(directory, ".lifecycle.lock"));
             Directory.CreateDirectory(directory);
             return new FileStream(Path.Combine(directory, ".lifecycle.lock"),
                 FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        }
+
+        private sealed class LockPair : IDisposable
+        {
+            private readonly FileStream _legacy, _current;
+            internal LockPair(FileStream legacy, FileStream current) { _legacy = legacy; _current = current; }
+            public void Dispose() { _current.Dispose(); _legacy.Dispose(); }
         }
     }
 }

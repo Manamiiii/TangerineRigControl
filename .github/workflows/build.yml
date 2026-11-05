@@ -25,7 +25,7 @@ jobs:
         shell: pwsh
         run: |
           $process = Start-Process src/TangerineRigControl/bin/Release/TangerineRigControl.exe -ArgumentList '--self-test' -PassThru -RedirectStandardOutput self-test.out -RedirectStandardError self-test.err
-          if (-not $process.WaitForExit(60000)) { $process.Kill(); throw 'Self-test timed out after 60 seconds.' }
+          if (-not $process.WaitForExit(60000)) { throw 'Self-test timed out after 60 seconds.' }
           $process.WaitForExit()
           Get-Content self-test.out,self-test.err
           Write-Output "Self-test exit code: $($process.ExitCode)"
@@ -49,10 +49,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Fixture build failed' }
           ./tools/Package-Windows.ps1 -Fixture -LegacyFixtureLayout -FixtureVersion 0.3.9.0 -ExecutablePath artifacts/fixture/build/TangerineRigControl.exe -OutputDirectory artifacts/fixture/old -MakensisPath artifacts/nsis/makensis.exe
           ./tools/Package-Windows.ps1 -Fixture -ExecutablePath artifacts/fixture/build/TangerineRigControl.exe -OutputDirectory artifacts/fixture/new -MakensisPath artifacts/nsis/makensis.exe
+          ./tools/Package-Windows.ps1 -Fixture -SuiteFixtureLayout -FixtureVersion 0.4.2.0 -ExecutablePath artifacts/fixture/build/TangerineRigControl.exe -OutputDirectory artifacts/fixture/previous -MakensisPath artifacts/nsis/makensis.exe
       - name: Verify isolated installer lifecycle
         shell: pwsh
         run: |
           ./tools/Test-Installer.ps1 -OldSetup (Get-ChildItem artifacts/fixture/old/*Setup.exe).FullName -NewSetup (Get-ChildItem artifacts/fixture/new/*Setup.exe).FullName
+      - name: Verify previous suite layout upgrade
+        shell: pwsh
+        run: ./tools/Test-Installer.ps1 -PreviousSuiteLayout -OldSetup (Get-ChildItem artifacts/fixture/previous/*Setup.exe).FullName -NewSetup (Get-ChildItem artifacts/fixture/new/*Setup.exe).FullName
       - name: Report hashes (binaries are not published)
         shell: pwsh
         run: Get-Content artifacts/windows/*.sha256

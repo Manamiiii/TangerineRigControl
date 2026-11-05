@@ -31,7 +31,7 @@
 
 运行要求：Windows 10/11 **x64**、**.NET Framework 4.8 或 4.8.1**，以及所需设备的原厂软件。先确认原厂软件能手动开关设备。缺少运行环境时参阅 [Microsoft 安装说明](https://learn.microsoft.com/en-us/dotnet/framework/install/)。普通用户不需要源码、Node、npm、Python 或 Rust。macOS、Linux、Windows ARM64 尚未支持或验证。
 
-**0.4.2 预览版已加入 Setup 构建，但尚未公开发布安装包或创建 Release。** 当前 CI 只验证，不上传安装产物；可以按 [开发说明](docs/DEVELOPMENT.md) 自行构建。历史 [0.3.3 便携包构建](https://github.com/Manamiiii/TangerineRigControl/actions/runs/41575988118) 的 Artifacts 可能仍可下载，需要登录 GitHub且产物未过期；它不是新版 Setup。
+**0.4.3 预览版已加入 Setup 构建，但尚未公开发布安装包或创建 Release。** 当前 CI 只验证，不上传安装产物；可以按 [开发说明](docs/DEVELOPMENT.md) 自行构建。历史 [0.3.3 便携包构建](https://github.com/Manamiiii/TangerineRigControl/actions/runs/41575988118) 的 Artifacts 可能仍可下载，需要登录 GitHub且产物未过期；它不是新版 Setup。
 
 获得对应版本的包后：
 
@@ -40,7 +40,7 @@
 | Setup（推荐日常使用） | 核对 `.sha256`，运行 `TangerineRigControl-<版本>-windows-x64-Setup.exe`，按向导安装，再从开始菜单打开。默认仅安装给当前用户，不请求管理员权限。 |
 | Portable（免安装） | 核对 `.sha256`，解压 `TangerineRigControl-<版本>-windows-portable.zip`，运行其中的 `TangerineRigControl.exe`。 |
 
-两种方式都保留本机配置；安装版支持 Windows 卸载入口，卸载默认保留配置，更新需退出程序后手动运行新版安装器。完整说明见 [Windows 安装版](docs/INSTALLER.md) 和 [下载校验](docs/USAGE.md#下载校验)。程序运行中，安装或卸载会拒绝继续，不强制结束进程。
+新装程序默认位于 `%LOCALAPPDATA%\Tangerine\Apps\TangerineRigControl`，已有两代 Programs 安装目录原位升级。两种方式都保留本机配置；安装版支持 Windows 卸载入口，卸载默认保留配置，更新需退出程序后手动运行新版安装器。完整说明见 [Windows 安装版](docs/INSTALLER.md) 和 [下载校验](docs/USAGE.md#下载校验)。程序运行中，安装或卸载会拒绝继续，不强制结束进程。
 
 仓库的 **Code → Download ZIP 是源码，不是可运行程序**。未来公开发布的包会放在 [Releases](https://github.com/Manamiiii/TangerineRigControl/releases)，随包附带对应源码、许可证和校验值。自动构建通过不代表已在你的硬件上验收。
 
@@ -78,7 +78,7 @@
 
 ## 数据、更新与反馈
 
-配置保存在 `%LOCALAPPDATA%\TangerineRigControl\settings.xml`，正常保存保留上一次的 `.bak`。默认不写日志、不生成崩溃转储；原厂软件自身的联网和隐私行为由原厂决定。
+新配置保存在 `%LOCALAPPDATA%\Tangerine\Data\TangerineRigControl\Config\settings.xml`，上一份备份位于同级 `Backups`。首次启动会校验并复制旧默认目录的配置，保留原件；发现冲突或中断时停止，不覆盖。迁移和回退请先阅读 [数据目录说明](docs/DATA.md)。默认不写日志、不生成崩溃转储；原厂软件自身的联网和隐私行为由原厂决定。
 
 仓库不预置作者的安装目录或录制坐标。程序路径在使用者的电脑上发现或选择，录制步骤由使用者配置，均作为本机配置保存，不会自动上传。便携包不包含这些私人配置；启用登录启动时，程序位置只写入当前用户的 Windows 启动项。
 
@@ -97,13 +97,13 @@
 | 要找的内容 | 位置 |
 | --- | --- |
 | 程序源码 | [WinForms 工程](src/TangerineRigControl/)，其中 UI 是窗口，Automation 是录制，Infrastructure 是配置与系统适配，Services 是灯效接口 |
-| 使用、构建与安装说明 | [使用与排错](docs/USAGE.md)、[开发说明](docs/DEVELOPMENT.md)、[安装版说明](docs/INSTALLER.md) |
+| 使用、构建与安装说明 | [使用与排错](docs/USAGE.md)、[开发说明](docs/DEVELOPMENT.md)、[安装版说明](docs/INSTALLER.md)、[数据目录与迁移](docs/DATA.md) |
 | 测试 | 工程内的 [自检](src/TangerineRigControl/Infrastructure/SelfTest.cs) 与 [回归用例](src/TangerineRigControl/Infrastructure/RegressionTests.cs)，[隔离安装检查](tools/Test-Installer.ps1) 与 [托管机正式身份检查](tools/Test-ProductionInstaller.ps1) |
 | 构建与打包 | [解决方案](TangerineRigControl.sln)、[便携包脚本](tools/Package-Portable.ps1)、[Windows 打包脚本](tools/Package-Windows.ps1)、[NSIS 安装器配置](packaging/windows/installer.nsi) |
 | 图标 | [图形绘制源](tools/Generate-AppIcon.ps1) 生成 [多尺寸 ICO 和 PNG 预览](src/TangerineRigControl/Assets/)，主程序、托盘、Setup 和开始菜单共用 |
 | 本地生成物 | 忽略的 `artifacts/windows/` 默认存放正式身份 Setup、Portable 及校验值。按轮次整理时分别使用 `final/`、`fixture-old/`、`fixture-new/` 及构建日志目录。fixture 仅供测试 |
 
-正常入口直接启动 EXE，工作目录取程序目录。登录启动使用同一 EXE 的 `--startup` 参数，开发自检使用 `--self-test`。正常运行无需启动脚本、专用环境变量或监听端口。Portable 与安装版继续共享本用户配置和单实例锁。从托盘正常退出后再切换入口。
+正常入口直接启动 EXE，工作目录取程序目录。登录启动使用同一 EXE 的 `--startup` 参数，开发自检使用 `--self-test`。正常运行无需启动脚本、专用环境变量或监听端口。当前版本的源码构建、Portable 与安装版共享上述 Data 目录和单实例锁。从托盘正常退出后再切换入口；迁移后不要交替使用旧版，旧版改写原件会触发新版的冲突保护。
 
 ## License
 

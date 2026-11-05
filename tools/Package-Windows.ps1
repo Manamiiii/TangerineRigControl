@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+﻿# SPDX-License-Identifier: GPL-3.0-only
 # Copyright (c) 2026 Manamiiii
 [CmdletBinding()]
 param(
@@ -7,6 +7,7 @@ param(
     [string]$MakensisPath,
     [switch]$Fixture,
     [switch]$LegacyFixtureLayout,
+    [switch]$SuiteFixtureLayout,
     [string]$FixtureVersion
 )
 $ErrorActionPreference = 'Stop'
@@ -35,7 +36,7 @@ if ($peOffset -lt 0 -or $peOffset + 26 -gt $bytes.Length -or
     [BitConverter]::ToUInt16($bytes, $peOffset + 4) -ne 0x8664) { throw 'Setup requires a Windows x64 application binary.' }
 $appName = if ($Fixture) { 'TangerineRigControl.InstallerTest' } else { 'TangerineRigControl' }
 if ($info.ProductName -ne $appName) { throw 'Application identity does not match the requested installer identity.' }
-if (-not $Fixture -and ($FixtureVersion -or $LegacyFixtureLayout)) { throw 'Only isolated fixtures may override the installer version.' }
+if (-not $Fixture -and ($FixtureVersion -or $LegacyFixtureLayout -or $SuiteFixtureLayout)) { throw 'Only isolated fixtures may override the installer version.' }
 $numeric = if ($FixtureVersion) { $FixtureVersion } else { $info.FileVersion }
 if ($numeric -notmatch '^\d+\.\d+\.\d+\.\d+$') { throw 'Invalid numeric installer version.' }
 $label = if ($Fixture) { $numeric + '-fixture' } else { $info.ProductVersion }
@@ -90,6 +91,7 @@ try {
     $arguments = @('/V2', '/INPUTCHARSET', 'UTF8', "/DAPP_NAME=$appName", "/DAPP_GUID=$appGuid", "/DNUMERIC_VERSION=$numeric",
         "/DPAYLOAD=$payload", "/DOUTPUT_FILE=$setup", "/DREMOVE_MANIFEST=$remove", "/DDIRECTORY_CHECKS=$check", "/DLICENSE_PAGE=$licensePage",
         (Join-Path $root 'packaging/windows/installer.nsi'))
+    if ($SuiteFixtureLayout) { $arguments = @('/DSUITE_FIXTURE_LAYOUT') + $arguments }
     if ($LegacyFixtureLayout) { $arguments = @('/DLEGACY_FIXTURE_LAYOUT') + $arguments }
     & $MakensisPath @arguments
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $setup)) { throw 'NSIS build failed.' }

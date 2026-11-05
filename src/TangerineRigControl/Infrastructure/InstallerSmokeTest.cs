@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-only
+﻿// SPDX-License-Identifier: GPL-3.0-only
 // Copyright (c) 2026 Manamiiii
 #if INSTALLER_TEST
 using System;
@@ -17,6 +17,18 @@ namespace TangerineRigControl.Infrastructure
         internal static int Run(string[] args)
         {
             if (args.Length == 1 && args[0] == "--fixture-startup-test") return CheckStartupOwnership();
+            if (args.Length == 1 && (args[0] == "--fixture-save-only" || args[0] == "--fixture-read-only"))
+            {
+                var value = SettingsStore.Load();
+                if (args[0] == "--fixture-save-only")
+                {
+                    value.UseAuraSdk = false;
+                    value.LConnect.InitialDelayMilliseconds = 777;
+                    SettingsStore.Save(value);
+                    SettingsStore.Save(SettingsStore.Clone(value));
+                }
+                return !value.UseAuraSdk && value.LConnect.InitialDelayMilliseconds == 777 ? 0 : 91;
+            }
             if (args.Length != 1 || (args[0] != "--fixture-write" && args[0] != "--fixture-read")) return 90;
             var settings = SettingsStore.Load();
             if (args[0] == "--fixture-write")
@@ -32,15 +44,15 @@ namespace TangerineRigControl.Infrastructure
             using (var form = new MainForm(settings))
             using (var timer = new Timer { Interval = 100 })
             {
-                form.Shown += delegate { File.WriteAllText(Path.Combine(AppIdentity.DataDirectory, "ready"), "ready"); };
+                form.Shown += delegate { File.WriteAllText(Path.Combine(AppIdentity.RuntimeDirectory, "ready"), "ready"); };
                 timer.Tick += delegate
                 {
-                    if (!File.Exists(Path.Combine(AppIdentity.DataDirectory, "stop"))) return;
+                    if (!File.Exists(Path.Combine(AppIdentity.RuntimeDirectory, "stop"))) return;
                     timer.Stop();
                     // Exercise close-to-tray and the actual tray exit handler, without hardware actions.
                     form.Close();
                     if (form.IsDisposed || form.Visible) throw new InvalidOperationException("Window close did not retain the tray application.");
-                    File.WriteAllText(Path.Combine(AppIdentity.DataDirectory, "tray-close-passed"), "passed");
+                    File.WriteAllText(Path.Combine(AppIdentity.RuntimeDirectory, "tray-close-passed"), "passed");
                     var tray = (NotifyIcon)typeof(MainForm).GetField("_trayIcon", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(form);
                     foreach (ToolStripItem item in tray.ContextMenuStrip.Items)
                         if (item.Text == "退出") { item.PerformClick(); return; }
