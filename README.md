@@ -103,6 +103,8 @@
 | 图标 | [图形绘制源](tools/Generate-AppIcon.ps1) 生成 [多尺寸 ICO 和 PNG 预览](src/TangerineRigControl/Assets/)，主程序、托盘、Setup 和开始菜单共用 |
 | 本地生成物 | 忽略的 `artifacts/windows/` 默认存放正式身份 Setup、Portable 及校验值。按轮次整理时分别使用 `final/`、`fixture-old/`、`fixture-new/` 及构建日志目录。fixture 仅供测试 |
 
+本地开发完成后，按 [桌面验收交付步骤](docs/DEVELOPMENT.md#本地桌面验收入口的交付) 核对固定 EXE 与当前源码；源码更新不会自动替换桌面入口或正在运行的程序。
+
 正常入口直接启动 EXE，工作目录取程序目录。登录启动使用同一 EXE 的 `--startup` 参数，开发自检使用 `--self-test`。正常运行无需启动脚本、专用环境变量或监听端口。当前版本的源码构建、Portable 与安装版共享上述 Data 目录和单实例锁。从托盘正常退出后再切换入口；迁移后不要交替使用旧版，旧版改写原件会触发新版的冲突保护。
 
 ## License

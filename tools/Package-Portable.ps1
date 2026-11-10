@@ -23,7 +23,7 @@ if ([IO.Path]::GetFileName($ExecutablePath) -ne 'TangerineRigControl.exe') { thr
 $documents = @('LICENSE', 'THIRD-PARTY-NOTICES.md', 'README.md', 'docs/USAGE.md', 'docs/DEVELOPMENT.md', 'docs/INSTALLER.md', 'docs/DATA.md', 'docs/NIGHTLY-DEVICE-TEST.md', 'docs/images/main-window.png', 'packaging/windows/NSIS-LICENSE.txt')
 $projectPath = 'src/TangerineRigControl/TangerineRigControl.csproj'
 [xml]$project = Get-Content -LiteralPath (Join-Path $repositoryRoot $projectPath) -Raw
-$sourceFiles = $documents + @('TangerineRigControl.sln', $projectPath, 'tools/Package-Portable.ps1', 'tools/Package-Windows.ps1', 'tools/Test-Installer.ps1', 'tools/Test-ProductionInstaller.ps1', 'tools/Check-PublicContent.ps1', 'tools/Generate-AppIcon.ps1', 'tools/verify_windows_icons.py', 'packaging/windows/installer.nsi')
+$sourceFiles = $documents + @('TangerineRigControl.sln', $projectPath, 'tools/Package-Portable.ps1', 'tools/Package-Windows.ps1', 'tools/Test-Installer.ps1', 'tools/Test-ProductionInstaller.ps1', 'tools/Check-PublicContent.ps1', 'tools/Test-DesktopEntry.ps1', 'tools/Generate-AppIcon.ps1', 'tools/verify_windows_icons.py', 'packaging/windows/installer.nsi')
 foreach ($item in $project.SelectNodes("//*[local-name()='Compile' or local-name()='EmbeddedResource' or local-name()='None']")) {
     $sourceFiles += Join-Path ([IO.Path]::GetDirectoryName($projectPath)) $item.Include
 }
